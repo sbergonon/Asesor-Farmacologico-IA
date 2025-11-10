@@ -1,0 +1,5 @@
+{
+  "name": "Asesor Farmacológico IA",
+  "description": "Una aplicación de IA para un análisis farmacológico integral. Evalúa interacciones entre medicamentos, contraindicaciones por condiciones de salud, factores farmacogenéticos y más.",
+  "requestFramePermissions": []
+}
