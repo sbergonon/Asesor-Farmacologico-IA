@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
@@ -13,6 +14,7 @@ import PatientPanel from './components/PatientPanel';
 import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
 import ProactiveAlerts from './components/ProactiveAlerts';
+import ApiKeyModal from './components/ApiKeyModal';
 
 
 type AnalysisMode = 'individual' | 'batch';
@@ -38,6 +40,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('form');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
   
   const [lang] = useState<'es' | 'en'>(
     navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
@@ -45,6 +48,10 @@ const App: React.FC = () => {
   const t = translations[lang];
 
   useEffect(() => {
+    if (!process.env.API_KEY) {
+      setIsApiKeyMissing(true);
+    }
+
     try {
       const savedHistory = localStorage.getItem('drugInteractionHistory');
       if (savedHistory) {
@@ -231,6 +238,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+      {isApiKeyMissing && <ApiKeyModal t={t} />}
       <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-10">
         <Header appName={t.appName} appDescription={t.appDescription} />
         <Disclaimer t={t} />
