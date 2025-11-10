@@ -278,10 +278,15 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   } catch (error: any) {
     console.error("Gemini API call failed:", error);
     
-    if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
-      throw error;
+    if (error instanceof Error) {
+      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+        throw error;
+      }
+      // Provide a more detailed error message to the user for better debugging.
+      throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
     }
     
+    // Fallback for non-Error objects
     throw new Error(t.error_service_unavailable);
   }
 };
@@ -329,9 +334,14 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
-    if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
-      throw error;
+    if (error instanceof Error) {
+        if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+          throw error;
+        }
+        // Provide a more detailed error message for better debugging.
+        throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
     }
+    // Fallback for non-Error objects
     throw new Error(t.error_service_unavailable);
   }
 };
