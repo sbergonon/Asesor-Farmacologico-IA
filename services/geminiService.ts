@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import type { 
     GroundingChunk, 
@@ -182,7 +183,8 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    // FIX: Initialize GoogleGenAI with API key from process.env as per guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -275,10 +277,6 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 
   } catch (error: any) {
     console.error("Gemini API call failed:", error);
-
-    if (error instanceof ReferenceError || error.toString().toLowerCase().includes("api key")) {
-        throw new Error(t.error_api_key_invalid);
-    }
     
     if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
       throw error;
@@ -297,7 +295,8 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    // FIX: Initialize GoogleGenAI with API key from process.env as per guidelines.
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -330,9 +329,6 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
-    if (error instanceof ReferenceError || error.toString().toLowerCase().includes("api key")) {
-        throw new Error(t.error_api_key_invalid);
-    }
     if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
       throw error;
     }
