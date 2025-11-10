@@ -14,9 +14,9 @@ import type {
 } from '../types';
 import { translations } from '../lib/translations';
 
-// FIX: Per @google/genai guidelines, initialize GoogleGenAI with API key from process.env.API_KEY.
+// FIX: Per @google/genai guidelines, initialize GoogleGenAI with API key from import.meta.env.VITE_GEMINI_API_KEY.
 // Do not use a separate initialization function or allow user-provided keys.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
   const t = translations[lang];
