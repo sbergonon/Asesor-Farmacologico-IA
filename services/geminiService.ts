@@ -37,6 +37,7 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
       return medStr;
     }).join('; ');
 
+  // FIX: Corrected typo from noAlleries to noAllergies.
   const allergiesText = allergies.trim() ? `${t.prompt.allergies}: ${allergies}. ${t.prompt.allergiesNote}` : t.prompt.noAllergies;
   const substanceText = otherSubstances.trim() ? `${t.prompt.otherSubstances}: ${otherSubstances}.` : t.prompt.noOtherSubstances;
   const pharmacogeneticsText = pharmacogenetics.trim() ? `${t.prompt.pharmacogeneticsInfo}: ${pharmacogenetics}.` : t.prompt.noPharmacogeneticsInfo;
@@ -183,7 +184,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    // FIX: Initialize GoogleGenAI with API key from process.env as per guidelines.
+    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, removing the dependency on Vite's import.meta.env and the manual key check.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
@@ -279,7 +280,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     console.error("Gemini API call failed:", error);
     
     if (error instanceof Error) {
-      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
         throw error;
       }
       // Provide a more detailed error message to the user for better debugging.
@@ -300,7 +301,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    // FIX: Initialize GoogleGenAI with API key from process.env as per guidelines.
+    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, removing the dependency on Vite's import.meta.env and the manual key check.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -335,7 +336,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
     if (error instanceof Error) {
-        if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+        if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
           throw error;
         }
         // Provide a more detailed error message for better debugging.
