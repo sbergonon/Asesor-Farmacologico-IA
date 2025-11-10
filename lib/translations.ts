@@ -1,3 +1,4 @@
+
 export const translations = {
   es: {
     lang_code: "es",
@@ -231,6 +232,9 @@ export const translations = {
     terms_s8_title: "8. Modificaciones de los Términos",
     terms_s8_text: "Nos reservamos el derecho de modificar estos Términos y Condiciones en cualquier momento. El uso continuado de la Aplicación después de cualquier cambio constituirá su aceptación de los nuevos términos.",
     terms_close_button: "Entendido",
+    api_key_modal_title: "Configuración Requerida",
+    api_key_modal_description: "Esta aplicación requiere una clave de API de Google Gemini para funcionar. Para continuar, configura la variable de entorno `API_KEY` en los ajustes de tu servicio de hosting (ej. Render, Vercel).",
+    api_key_modal_obtaining_link: "Obtén una Clave de API de Google AI Studio",
     prompt: {
         role: "Eres un asistente de IA experto en farmacología y farmacia clínica. Tu tarea es realizar un análisis exhaustivo y segmentado de posibles interacciones y contraindicaciones farmacológicas.",
         masterInstruction: "**Instrucción Maestra Obligatoria: Formato de Salida Dual (JSON y Markdown).**",
@@ -531,6 +535,9 @@ export const translations = {
     terms_s8_title: "8. Modification of Terms",
     terms_s8_text: "We reserve the right to modify these Terms and Conditions at any time. Your continued use of the Application after any changes will constitute your acceptance of the new terms.",
     terms_close_button: "Understood",
+    api_key_modal_title: "Configuration Required",
+    api_key_modal_description: "This application requires a Google Gemini API key to function. To proceed, please set up the `API_KEY` environment variable in your hosting service's settings (e.g., Render, Vercel).",
+    api_key_modal_obtaining_link: "Get a Google AI Studio API Key",
     prompt: {
         role: "You are an expert AI assistant in pharmacology and clinical pharmacy. Your task is to perform a comprehensive and segmented analysis of potential drug interactions and contraindications.",
         masterInstruction: "**Mandatory Master Instruction: Dual Output Format (JSON and Markdown).**",
