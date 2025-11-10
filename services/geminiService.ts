@@ -14,9 +14,9 @@ import type {
 } from '../types';
 import { translations } from '../lib/translations';
 
-// FIX: Per @google/genai guidelines, initialize GoogleGenAI with API key from import.meta.env.VITE_GEMINI_API_KEY.
+// Per @google/genai guidelines, initialize GoogleGenAI with API key from process.env.API_KEY.
 // Do not use a separate initialization function or allow user-provided keys.
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY! });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
   const t = translations[lang];
@@ -277,10 +277,15 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 
   } catch (error: any) {
     console.error("Gemini API call failed:", error);
+
+    if (error.toString().toLowerCase().includes("api key")) {
+        throw new Error(t.error_api_key_invalid);
+    }
+    
     if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
       throw error;
     }
-    // FIX: Removed API key specific error message as key is handled by environment.
+    
     throw new Error(t.error_service_unavailable);
   }
 };
@@ -326,7 +331,10 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
-     if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+    if (error.toString().toLowerCase().includes("api key")) {
+        throw new Error(t.error_api_key_invalid);
+    }
+    if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
       throw error;
     }
     throw new Error(t.error_service_unavailable);

@@ -1,7 +1,6 @@
 import React, { useRef, useState, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
-// FIX: Import all specific interaction types to create a robust union type.
 import type { 
     AnalysisResult, 
     AnyInteraction,
@@ -40,7 +39,6 @@ const ArrowPathIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 interface ResultDisplayProps {
   isLoading: boolean;
   analysisResult: AnalysisResult | null;
-  // Fix: Correctly type the `t` prop to allow for proper type inference downstream. This was previously incorrect, causing cascading type errors.
   t: (typeof translations)['en'] | (typeof translations)['es'];
 }
 
@@ -111,12 +109,10 @@ type HighRiskItem = {
     description: string;
 };
 
-// Fix: Define an interface for the Section component's props to make the type contract explicit, resolving TypeScript inference errors.
 interface SectionProps {
   title: string;
   count: number;
   sectionKey: string;
-  // FIX: Make children optional to resolve TypeScript errors where it incorrectly infers children are missing.
   children?: React.ReactNode;
 }
 
@@ -362,7 +358,31 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
     }
   };
   
-  // FIX: Applied the SectionProps interface to correctly type the component's props.
+  if (isLoading) {
+    return (
+      <div className="mt-8 p-4 md:p-6 bg-white dark:bg-slate-800/50 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
+        <LoadingSkeleton />
+      </div>
+    );
+  }
+
+  if (!analysisResult) {
+    return null;
+  }
+  
+  const filterByRisk = <T extends AnyInteraction>(items: T[] | undefined): T[] => {
+    if (!items) return [];
+    if (!activeFilter) return items;
+    return items.filter(item => item.riskLevel === activeFilter);
+  };
+  
+  const filteredDrugDrug = filterByRisk<DrugDrugInteraction>(analysisResult.drugDrugInteractions);
+  const filteredDrugSubstance = filterByRisk<DrugSubstanceInteraction>(analysisResult.drugSubstanceInteractions);
+  const filteredDrugAllergy = filterByRisk<DrugAllergyAlert>(analysisResult.drugAllergyAlerts);
+  const filteredDrugCondition = filterByRisk<DrugConditionContraindication>(analysisResult.drugConditionContraindications);
+  const filteredDrugPgx = filterByRisk<DrugPharmacogeneticContraindication>(analysisResult.drugPharmacogeneticContraindications);
+  const filteredBeers = filterByRisk<BeersCriteriaAlert>(analysisResult.beersCriteriaAlerts);
+
   const Section = ({ title, count, sectionKey, children }: SectionProps) => {
     if (count === 0) return null;
     return (
@@ -386,19 +406,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
             )}
         </div>
     );
-};
-
-  if (isLoading) {
-    return (
-      <div className="mt-8 p-4 md:p-6 bg-white dark:bg-slate-800/50 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700">
-        <LoadingSkeleton />
-      </div>
-    );
-  }
-
-  if (!analysisResult) {
-    return null;
-  }
+  };
   
   const getHighRiskItems = (): HighRiskItem[] => {
     if (!analysisResult) return [];
@@ -479,22 +487,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
     });
     return counts;
   }, [analysisResult]);
-
-  // FIX: This generic function was missing. It's needed to filter interactions by risk level.
-  // Using the `AnyInteraction` union type as the constraint preserves the full type, fixing all downstream property access errors.
-  const filterByRisk = <T extends AnyInteraction>(items: T[] | undefined): T[] => {
-    if (!items) return [];
-    if (!activeFilter) return items;
-    return items.filter(item => item.riskLevel === activeFilter);
-  };
-  
-  // FIX: Added definitions for filtered data. These were used in the JSX but not defined, causing a reference error.
-  const filteredDrugDrug = filterByRisk<DrugDrugInteraction>(analysisResult.drugDrugInteractions);
-  const filteredDrugSubstance = filterByRisk<DrugSubstanceInteraction>(analysisResult.drugSubstanceInteractions);
-  const filteredDrugAllergy = filterByRisk<DrugAllergyAlert>(analysisResult.drugAllergyAlerts);
-  const filteredDrugCondition = filterByRisk<DrugConditionContraindication>(analysisResult.drugConditionContraindications);
-  const filteredDrugPgx = filterByRisk<DrugPharmacogeneticContraindication>(analysisResult.drugPharmacogeneticContraindications);
-  const filteredBeers = filterByRisk<BeersCriteriaAlert>(analysisResult.beersCriteriaAlerts);
 
   return (
     <>

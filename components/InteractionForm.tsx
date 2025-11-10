@@ -262,8 +262,6 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
   const { checkedSubstances, customSupplements } = useMemo(() => {
     const allItems = otherSubstances.split(',').map(s => s.trim()).filter(Boolean);
-    // FIX: Explicitly type `new Set` as `Set<string>` to ensure correct type inference for `checkedSubstances`.
-    // The type was being inferred as `Set<unknown>`, causing downstream errors.
     const checked = new Set<string>(allItems.filter(item => predefinedSubstanceList.includes(item)));
     const custom = allItems.filter(item => !predefinedSubstanceList.includes(item));
     return { checkedSubstances: checked, customSupplements: custom };
@@ -288,7 +286,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     const value = e.target.value;
     setCurrentSupplement(value);
     if (value.length > 0) {
-      const allAddedSubstances = new Set([...customSupplements, ...Array.from(checkedSubstances)]);
+      // FIX: Explicitly type the Set to avoid type inference issues and simplify creation.
+      const allAddedSubstances = new Set<string>([...customSupplements, ...checkedSubstances]);
       const filtered = supplementDatabase.filter(
         sup => 
           sup.name.toLowerCase().includes(value.toLowerCase()) &&
