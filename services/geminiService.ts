@@ -14,9 +14,6 @@ import type {
 } from '../types';
 import { translations } from '../lib/translations';
 
-// Per @google/genai guidelines, initialize GoogleGenAI with API key from process.env.API_KEY.
-// Do not use a separate initialization function or allow user-provided keys.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
   const t = translations[lang];
@@ -185,6 +182,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -278,7 +276,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   } catch (error: any) {
     console.error("Gemini API call failed:", error);
 
-    if (error.toString().toLowerCase().includes("api key")) {
+    if (error instanceof ReferenceError || error.toString().toLowerCase().includes("api key")) {
         throw new Error(t.error_api_key_invalid);
     }
     
@@ -299,6 +297,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -331,7 +330,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
-    if (error.toString().toLowerCase().includes("api key")) {
+    if (error instanceof ReferenceError || error.toString().toLowerCase().includes("api key")) {
         throw new Error(t.error_api_key_invalid);
     }
     if (error instanceof Error && (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check))) {
