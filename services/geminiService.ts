@@ -1,4 +1,3 @@
-
 import { GoogleGenAI } from "@google/genai";
 import type { 
     GroundingChunk, 
@@ -37,7 +36,6 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
       return medStr;
     }).join('; ');
 
-  // FIX: Corrected typo from noAlleries to noAllergies.
   const allergiesText = allergies.trim() ? `${t.prompt.allergies}: ${allergies}. ${t.prompt.allergiesNote}` : t.prompt.noAllergies;
   const substanceText = otherSubstances.trim() ? `${t.prompt.otherSubstances}: ${otherSubstances}.` : t.prompt.noOtherSubstances;
   const pharmacogeneticsText = pharmacogenetics.trim() ? `${t.prompt.pharmacogeneticsInfo}: ${pharmacogenetics}.` : t.prompt.noPharmacogeneticsInfo;
@@ -184,8 +182,11 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, which resolves the TypeScript error with `import.meta.env`.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error(t.error_api_key_invalid);
+    }
+    const ai = new GoogleGenAI({ apiKey });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -283,11 +284,9 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
         throw error;
       }
-      // Provide a more detailed error message to the user for better debugging.
       throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
     }
     
-    // Fallback for non-Error objects
     throw new Error(t.error_service_unavailable);
   }
 };
@@ -301,8 +300,11 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, which resolves the TypeScript error with `import.meta.env`.
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      throw new Error(t.error_api_key_invalid);
+    }
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
@@ -314,21 +316,18 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
 
     try {
-      // Attempt to parse the entire response as JSON
       const result = JSON.parse(text);
       if (Array.isArray(result)) {
         return result as SupplementInteraction[];
       }
-      // If parsing succeeds but it's not an array, return empty.
       return [];
     } catch (e) {
-      // If full parsing fails, try to extract JSON from markdown code block
       const jsonMatch = text.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch && jsonMatch[1]) {
         try {
           return JSON.parse(jsonMatch[1]) as SupplementInteraction[];
         } catch (e2) {
-          // Fall through to error if parsing the extracted content fails
+          // Fall through
         }
       }
       throw new Error(t.error_supplement_parsing);
@@ -339,10 +338,8 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
         if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
           throw error;
         }
-        // Provide a more detailed error message for better debugging.
         throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
     }
-    // Fallback for non-Error objects
     throw new Error(t.error_service_unavailable);
   }
 };

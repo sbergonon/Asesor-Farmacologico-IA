@@ -1,6 +1,3 @@
-
-
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
@@ -179,7 +176,6 @@ const App: React.FC = () => {
       });
       localStorage.removeItem('savedAnalysisSession');
 
-// FIX: Added curly braces to the catch block to fix a syntax error that was causing numerous parser errors.
     } catch (e: any) {
       setError(e.message || t.error_unexpected);
     } finally {

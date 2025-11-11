@@ -1,6 +1,3 @@
-
-
-
 export const translations = {
   es: {
     lang_code: "es",
@@ -109,7 +106,7 @@ export const translations = {
     error_no_response: "La IA no devolvió una respuesta válida. Esto puede deberse a un problema temporal o a que la consulta fue bloqueada. Inténtalo de nuevo más tarde.",
     error_no_response_check: "no devolvió una respuesta válida",
     error_service_unavailable: "No se pudo obtener el análisis del servicio de IA. Por favor, inténtalo de nuevo más tarde.",
-    error_api_key_invalid: "La clave API no es válida o no está configurada. Por favor, asegúrate de que la variable de entorno API_KEY esté configurada correctamente en tu entorno de despliegue (p. ej., Render).",
+    error_api_key_invalid: "La clave API no es válida o no está configurada. Por favor, asegúrate de que la variable de entorno con el nombre `API_KEY` esté configurada correctamente en tu servicio de hosting.",
     error_supplement_parsing: "No se pudo interpretar la respuesta de interacciones del suplemento.",
     proactive_alert_title: "¡Alerta Proactiva de Riesgo Crítico!",
     allergy_alert_title: "Alerta Crítica de Alergia",
@@ -236,8 +233,8 @@ export const translations = {
     terms_s8_text: "Nos reservamos el derecho de modificar estos Términos y Condiciones en cualquier momento. El uso continuado de la Aplicación después de cualquier cambio constituirá su aceptación de los nuevos términos.",
     terms_close_button: "Entendido",
     api_key_modal_title: "Configuración de Clave API Requerida",
-    api_key_modal_description: "Esta aplicación requiere una clave de API de Google Gemini para funcionar. Para continuar, configura la variable de entorno `API_KEY` en los ajustes de tu servicio de hosting (ej. Render, Vercel).",
-    api_key_modal_obtaining_link: "Obtén una Clave de API de Google AI Studio",
+    api_key_modal_description: "Esta aplicación requiere una clave API de Google Gemini para funcionar. Para continuar, por favor configura una variable de entorno llamada `API_KEY` en los ajustes de tu servicio de hosting (ej. Render, Vercel).",
+    api_key_modal_obtaining_link: "Obtener una Clave API de Google AI Studio",
     prompt: {
         role: "Eres un asistente de IA experto en farmacología y farmacia clínica. Tu tarea es realizar un análisis exhaustivo y segmentado de posibles interacciones y contraindicaciones farmacológicas.",
         masterInstruction: "**Instrucción Maestra Obligatoria: Formato de Salida Dual (JSON y Markdown).**",
@@ -413,7 +410,7 @@ export const translations = {
     error_no_response: "The AI did not return a valid response. This may be due to a temporary issue or a blocked query. Please try again later.",
     error_no_response_check: "did not return a valid response",
     error_service_unavailable: "Could not get analysis from the AI service. Please try again later.",
-    error_api_key_invalid: "The API key is invalid or not configured. Please ensure the API_KEY environment variable is correctly set in your deployment environment (e.g., Render).",
+    error_api_key_invalid: "The API key is invalid or not configured. Please ensure the environment variable named `API_KEY` is correctly set in your hosting service.",
     error_supplement_parsing: "Could not parse the supplement interaction response.",
     proactive_alert_title: "Proactive Critical Risk Alert!",
     allergy_alert_title: "Critical Allergy Alert",
@@ -540,7 +537,7 @@ export const translations = {
     terms_s8_text: "We reserve the right to modify these Terms and Conditions at any time. Your continued use of the Application after any changes will constitute your acceptance of the new terms.",
     terms_close_button: "Understood",
     api_key_modal_title: "API Key Configuration Required",
-    api_key_modal_description: "This application requires a Google Gemini API key to function. To proceed, please set up the `API_KEY` environment variable in your hosting service's settings (e.g., Render, Vercel).",
+    api_key_modal_description: "This application requires a Google Gemini API key to function. To proceed, please set up an environment variable named `API_KEY` in your hosting service's settings (e.g., Render, Vercel).",
     api_key_modal_obtaining_link: "Get a Google AI Studio API Key",
     prompt: {
         role: "You are an expert AI assistant in pharmacology and clinical pharmacy. Your task is to perform a comprehensive and segmented analysis of potential drug interactions and contraindications.",
