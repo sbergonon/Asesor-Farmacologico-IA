@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
@@ -12,6 +13,7 @@ import TabSelector from './components/TabSelector';
 import TermsModal from './components/TermsModal';
 import BatchAnalysis from './components/BatchAnalysis';
 import PatientPanel from './components/PatientPanel';
+import ApiKeyModal from './components/ApiKeyModal';
 import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
 import ProactiveAlerts from './components/ProactiveAlerts';
@@ -42,6 +44,7 @@ const App: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [showSessionRestoredToast, setShowSessionRestoredToast] = useState(false);
+  const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
   
   const [lang] = useState<'es' | 'en'>(
     navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
@@ -52,6 +55,14 @@ const App: React.FC = () => {
   const isInitialRender = useRef(true);
 
   useEffect(() => {
+    // Check for API Key on initial load.
+    // This environment variable is expected to be injected by the build process.
+    if (!process.env.API_KEY) {
+      console.error("API Key is missing. Please set the API_KEY environment variable.");
+      setIsApiKeyMissing(true);
+      return; // Stop further execution of this effect if key is missing
+    }
+
     try {
       const savedHistory = localStorage.getItem('drugInteractionHistory');
       if (savedHistory) {
@@ -287,6 +298,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+      {isApiKeyMissing && <ApiKeyModal t={t} />}
       {showSessionRestoredToast && (
           <div className="fixed top-5 right-5 z-50 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-200 px-4 py-3 rounded-lg shadow-lg flex items-center animate-pulse">
             <CheckCircleIcon className="h-5 w-5 mr-2" />
