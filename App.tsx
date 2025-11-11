@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
+import { ApiKeyError } from './types';
 import Header from './components/Header';
 import Disclaimer from './components/Disclaimer';
 import InteractionForm from './components/InteractionForm';
@@ -35,7 +36,16 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Estado general y de la UI
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    try {
+      const savedHistory = localStorage.getItem('drugInteractionHistory');
+      return savedHistory ? JSON.parse(savedHistory) : [];
+    } catch (error) {
+      console.error("Failed to load history from localStorage:", error);
+      localStorage.removeItem('drugInteractionHistory');
+      return [];
+    }
+  });
   const [patientProfiles, setPatientProfiles] = useState<PatientProfile[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('form');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
@@ -51,6 +61,15 @@ const App: React.FC = () => {
   // Ref to track initial render for auto-saving
   const isInitialRender = useRef(true);
 
+  // Persist history to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('drugInteractionHistory', JSON.stringify(history));
+    } catch (error) {
+      console.error("Failed to save history to localStorage:", error);
+    }
+  }, [history]);
+  
   useEffect(() => {
     // Check for API Key on initial load.
     // This environment variable is expected to be injected by the build process.
@@ -61,10 +80,6 @@ const App: React.FC = () => {
     }
 
     try {
-      const savedHistory = localStorage.getItem('drugInteractionHistory');
-      if (savedHistory) {
-        setHistory(JSON.parse(savedHistory));
-      }
       const savedProfiles = localStorage.getItem('patientProfiles');
       if (savedProfiles) {
         setPatientProfiles(JSON.parse(savedProfiles));
@@ -86,7 +101,6 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("Failed to load data from localStorage:", error);
-      localStorage.removeItem('drugInteractionHistory');
       localStorage.removeItem('patientProfiles');
       localStorage.removeItem('savedAnalysisSession');
     }
@@ -136,6 +150,10 @@ const App: React.FC = () => {
     localStorage.removeItem('savedAnalysisSession');
   }, []);
 
+  const addHistoryItem = useCallback((item: HistoryItem) => {
+    setHistory(prevHistory => [item, ...prevHistory]);
+  }, []);
+
   const handleAnalyze = useCallback(async () => {
     if (medications.length === 0) {
       setError(t.error_add_medication);
@@ -169,19 +187,20 @@ const App: React.FC = () => {
         patientId,
       };
       
-      setHistory(prevHistory => {
-        const updatedHistory = [newHistoryItem, ...prevHistory];
-        localStorage.setItem('drugInteractionHistory', JSON.stringify(updatedHistory));
-        return updatedHistory;
-      });
+      addHistoryItem(newHistoryItem);
       localStorage.removeItem('savedAnalysisSession');
 
     } catch (e: any) {
-      setError(e.message || t.error_unexpected);
+      if (e instanceof ApiKeyError) {
+        setError(e.message);
+        setIsApiKeyMissing(true);
+      } else {
+        setError(e.message || t.error_unexpected);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -208,7 +227,6 @@ const App: React.FC = () => {
 
   const handleClearHistory = useCallback(() => {
     setHistory([]);
-    localStorage.removeItem('drugInteractionHistory');
   }, []);
 
   const handleSaveOrUpdateProfile = useCallback(() => {
@@ -336,6 +354,7 @@ const App: React.FC = () => {
                               onSaveProfile={handleSaveOrUpdateProfile}
                               existingPatientIds={existingPatientIds}
                               isLoading={isLoading}
+                              setIsApiKeyMissing={setIsApiKeyMissing}
                               t={t}
                           />
                       </div>
@@ -365,6 +384,7 @@ const App: React.FC = () => {
                     t={t} 
                     lang={lang} 
                     onViewResult={handleLoadHistory}
+                    onAnalysisComplete={addHistoryItem}
                   />
                 )}
               </>

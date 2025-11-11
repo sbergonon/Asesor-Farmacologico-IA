@@ -12,6 +12,7 @@ import type {
     Medication,
     SupplementInteraction
 } from '../types';
+import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
 
 
@@ -184,7 +185,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   try {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      throw new Error(t.error_api_key_invalid);
+      throw new ApiKeyError(t.error_api_key_invalid);
     }
     const ai = new GoogleGenAI({ apiKey });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
@@ -281,7 +282,10 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     console.error("Gemini API call failed:", error);
     
     if (error instanceof Error) {
-      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
+      if (error.message.includes('API key not valid') || error.message.includes('API key is invalid')) {
+        throw new ApiKeyError(t.error_api_key_invalid);
+      }
+      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
         throw error;
       }
       throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
@@ -302,7 +306,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
   try {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      throw new Error(t.error_api_key_invalid);
+      throw new ApiKeyError(t.error_api_key_invalid);
     }
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -335,7 +339,10 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
   } catch (error: any) {
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
     if (error instanceof Error) {
-        if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check) || error.message.includes('API key')) {
+        if (error.message.includes('API key not valid') || error.message.includes('API key is invalid')) {
+            throw new ApiKeyError(t.error_api_key_invalid);
+        }
+        if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
           throw error;
         }
         throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);

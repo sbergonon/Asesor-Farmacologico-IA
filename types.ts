@@ -156,3 +156,11 @@ export interface ProactiveAlert {
   title: string;
   message: string;
 }
+
+// Custom error for API key issues
+export class ApiKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApiKeyError';
+  }
+}

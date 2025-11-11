@@ -8,6 +8,7 @@ interface BatchAnalysisProps {
   t: any;
   lang: 'es' | 'en';
   onViewResult: (item: HistoryItem) => void;
+  onAnalysisComplete: (item: HistoryItem) => void;
 }
 
 type AnalysisStatus = 'pending' | 'analyzing' | 'completed' | 'error';
@@ -18,7 +19,7 @@ interface PatientStatus {
   error?: string;
 }
 
-const BatchAnalysis: React.FC<BatchAnalysisProps> = ({ t, lang, onViewResult }) => {
+const BatchAnalysis: React.FC<BatchAnalysisProps> = ({ t, lang, onViewResult, onAnalysisComplete }) => {
   const [patientData, setPatientData] = useState<BatchPatientData[]>([]);
   const [fileError, setFileError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -118,11 +119,7 @@ const BatchAnalysis: React.FC<BatchAnalysisProps> = ({ t, lang, onViewResult }) 
                 patientId: patient.patient_id,
             };
             
-            // Save to local storage
-            const savedHistory = localStorage.getItem('drugInteractionHistory') || '[]';
-            const history = JSON.parse(savedHistory);
-            history.unshift(historyItem);
-            localStorage.setItem('drugInteractionHistory', JSON.stringify(history));
+            onAnalysisComplete(historyItem);
 
             setAnalysisStatus(prev => prev.map(s => s.data.patient_id === patient.patient_id ? { ...s, status: 'completed', result: historyItem } : s));
         } catch (e: any) {

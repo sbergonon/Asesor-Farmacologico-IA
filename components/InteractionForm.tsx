@@ -9,6 +9,7 @@ import TrashIcon from './icons/TrashIcon';
 import SparklesIcon from './icons/SparklesIcon';
 import SaveIcon from './icons/SaveIcon';
 import type { Medication, SupplementInteraction } from '../types';
+import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
 import { analyzeSupplementInteractions } from '../services/geminiService';
 import CheckCircleIcon from './icons/CheckCircleIcon';
@@ -36,6 +37,7 @@ interface InteractionFormProps {
   onSaveProfile: () => void;
   existingPatientIds: Set<string>;
   isLoading: boolean;
+  setIsApiKeyMissing: (isMissing: boolean) => void;
   t: (typeof translations)['es'] | (typeof translations)['en'];
 }
 
@@ -79,6 +81,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   onSaveProfile,
   existingPatientIds,
   isLoading,
+  setIsApiKeyMissing,
   t,
 }) => {
   const [currentMedication, setCurrentMedication] = useState('');
@@ -328,9 +331,12 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
           const interactions = await analyzeSupplementInteractions(supplementName, medications, t.lang_code as 'es' | 'en');
           setSupplementInteractionCache(prev => ({ ...prev, [supplementName]: { status: 'completed', data: interactions } }));
       } catch (e: any) {
+          if (e instanceof ApiKeyError) {
+            setIsApiKeyMissing(true);
+          }
           setSupplementInteractionCache(prev => ({ ...prev, [supplementName]: { status: 'error', data: [], error: e.message || t.error_unexpected } }));
       }
-  }, [medications, t]);
+  }, [medications, t, setIsApiKeyMissing]);
 
   useEffect(() => {
     // When medications change, re-analyze all custom supplements.
@@ -504,7 +510,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             return a.name.localeCompare(b.name); // Alphabetical fallback
         });
 
-      setSuggestions(sortedSuggestions);
+      setSuggestions(sortedSuggestions.slice(0, 15)); // Limit to top 15 results
       setIsFetchingMeds(false);
     };
 
@@ -974,11 +980,13 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                 className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
               >
                 <option value="">{t.form_pgx_select_status}</option>
-                <option value={t.form_pgx_status_poor}>{t.form_pgx_status_poor}</option>
-                <option value={t.form_pgx_status_intermediate}>{t.form_pgx_status_intermediate}</option>
-                <option value={t.form_pgx_status_normal}>{t.form_pgx_status_normal}</option>
-                <option value={t.form_pgx_status_rapid}>{t.form_pgx_status_rapid}</option>
-                <option value={t.form_pgx_status_carrier}>{t.form_pgx_status_carrier}</option>
+                {/* FIX: Corrected translation keys for metabolizer status */}
+                <option value="Poor Metabolizer (PM)">{t.form_pgx_status_poor}</option>
+                <option value="Intermediate Metabolizer (IM)">{t.form_pgx_status_intermediate}</option>
+                <option value="Normal Metabolizer (NM)">{t.form_pgx_status_normal}</option>
+                <option value="Rapid Metabolizer (RM)">{t.form_pgx_status_rapid}</option>
+                <option value="Ultrarapid Metabolizer (UM)">{t.form_pgx_status_rapid}</option>
+                <option value="Carrier of risk allele">{t.form_pgx_status_carrier}</option>
               </select>
             </div>
           </div>
@@ -1088,7 +1096,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
               className="w-full sm:w-auto inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
             <SaveIcon className="h-5 w-5 mr-2" />
-            {isExistingProfile ? t.form_update_profile_button : t.form_update_profile_button}
+            {isExistingProfile ? t.form_update_profile_button : t.form_save_profile_button}
           </button>
           {showSaveNotification && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap">
