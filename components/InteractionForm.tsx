@@ -37,7 +37,8 @@ interface InteractionFormProps {
   onSaveProfile: () => void;
   existingPatientIds: Set<string>;
   isLoading: boolean;
-  setIsApiKeyMissing: (isMissing: boolean) => void;
+  isApiKeyMissing: boolean;
+  onApiKeyError: () => void;
   t: (typeof translations)['es'] | (typeof translations)['en'];
 }
 
@@ -81,7 +82,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   onSaveProfile,
   existingPatientIds,
   isLoading,
-  setIsApiKeyMissing,
+  isApiKeyMissing,
+  onApiKeyError,
   t,
 }) => {
   const [currentMedication, setCurrentMedication] = useState('');
@@ -332,11 +334,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
           setSupplementInteractionCache(prev => ({ ...prev, [supplementName]: { status: 'completed', data: interactions } }));
       } catch (e: any) {
           if (e instanceof ApiKeyError) {
-            setIsApiKeyMissing(true);
+            onApiKeyError();
           }
           setSupplementInteractionCache(prev => ({ ...prev, [supplementName]: { status: 'error', data: [], error: e.message || t.error_unexpected } }));
       }
-  }, [medications, t, setIsApiKeyMissing]);
+  }, [medications, t, onApiKeyError]);
 
   useEffect(() => {
     // When medications change, re-analyze all custom supplements.
@@ -1079,7 +1081,14 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         </div>
       </div>
       
-      <div className="flex flex-col sm:flex-row sm:justify-end sm:space-x-4 space-y-3 sm:space-y-0 pt-4 border-t border-slate-200 dark:border-slate-700">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:space-x-4 space-y-3 sm:space-y-0 pt-4 border-t border-slate-200 dark:border-slate-700">
+        <div className="flex-grow">
+            {isApiKeyMissing && (
+                <p className="text-sm text-red-600 dark:text-red-400 text-left sm:text-right pr-4">
+                    {t.api_key_analysis_disabled}
+                </p>
+            )}
+        </div>
         <button
             type="button"
             onClick={onClear}
@@ -1107,7 +1116,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         <button
             type="button"
             onClick={onAnalyze}
-            disabled={isLoading || !!dobError}
+            disabled={isLoading || !!dobError || isApiKeyMissing}
             className="w-full sm:w-auto inline-flex justify-center items-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
         >
             {isLoading ? (

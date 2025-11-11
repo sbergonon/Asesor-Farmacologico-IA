@@ -52,6 +52,7 @@ const App: React.FC = () => {
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [showSessionRestoredToast, setShowSessionRestoredToast] = useState(false);
   const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
+  const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   
   const [lang] = useState<'es' | 'en'>(
     navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
@@ -76,6 +77,7 @@ const App: React.FC = () => {
     if (!process.env.API_KEY) {
       console.error("API Key is missing. Please set the API_KEY environment variable.");
       setIsApiKeyMissing(true);
+      setIsApiKeyModalVisible(true);
       return; // Stop further execution of this effect if key is missing
     }
 
@@ -153,8 +155,18 @@ const App: React.FC = () => {
   const addHistoryItem = useCallback((item: HistoryItem) => {
     setHistory(prevHistory => [item, ...prevHistory]);
   }, []);
+  
+  const handleApiKeyError = useCallback(() => {
+    setIsApiKeyMissing(true);
+    setIsApiKeyModalVisible(true);
+  }, []);
 
   const handleAnalyze = useCallback(async () => {
+    if (isApiKeyMissing) {
+      handleApiKeyError();
+      return;
+    }
+
     if (medications.length === 0) {
       setError(t.error_add_medication);
       return;
@@ -193,14 +205,14 @@ const App: React.FC = () => {
     } catch (e: any) {
       if (e instanceof ApiKeyError) {
         setError(e.message);
-        setIsApiKeyMissing(true);
+        handleApiKeyError();
       } else {
         setError(e.message || t.error_unexpected);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, isApiKeyMissing, handleApiKeyError]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -312,7 +324,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-      {isApiKeyMissing && <ApiKeyModal t={t} onClose={() => setIsApiKeyMissing(false)} />}
+      {isApiKeyModalVisible && <ApiKeyModal t={t} onClose={() => setIsApiKeyModalVisible(false)} />}
       {showSessionRestoredToast && (
           <div className="fixed top-5 right-5 z-50 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-200 px-4 py-3 rounded-lg shadow-lg flex items-center animate-pulse">
             <CheckCircleIcon className="h-5 w-5 mr-2" />
@@ -354,7 +366,8 @@ const App: React.FC = () => {
                               onSaveProfile={handleSaveOrUpdateProfile}
                               existingPatientIds={existingPatientIds}
                               isLoading={isLoading}
-                              setIsApiKeyMissing={setIsApiKeyMissing}
+                              isApiKeyMissing={isApiKeyMissing}
+                              onApiKeyError={handleApiKeyError}
                               t={t}
                           />
                       </div>

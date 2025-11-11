@@ -236,6 +236,7 @@ export const translations = {
     api_key_modal_obtaining_link: "Obtener una Clave API de Google AI Studio",
     api_key_modal_warning: "La funcionalidad de la aplicación estará deshabilitada hasta que se configure la clave.",
     api_key_modal_close_button: "Cerrar por ahora",
+    api_key_analysis_disabled: "La clave API es necesaria para analizar.",
     prompt: {
         role: "Eres un asistente de IA experto en farmacología y farmacia clínica. Tu tarea es realizar un análisis exhaustivo y segmentado de posibles interacciones y contraindicaciones farmacológicas.",
         masterInstruction: "**Instrucción Maestra Obligatoria: Formato de Salida Dual (JSON y Markdown).**",
@@ -541,6 +542,7 @@ export const translations = {
     api_key_modal_obtaining_link: "Get a Google AI Studio API Key",
     api_key_modal_warning: "Application functionality will be disabled until the key is configured.",
     api_key_modal_close_button: "Close for now",
+    api_key_analysis_disabled: "API Key is required to analyze.",
     prompt: {
         role: "You are an expert AI assistant in pharmacology and clinical pharmacy. Your task is to perform a comprehensive and segmented analysis of potential drug interactions and contraindications.",
         masterInstruction: "**Mandatory Master Instruction: Dual Output Format (JSON and Markdown).**",
