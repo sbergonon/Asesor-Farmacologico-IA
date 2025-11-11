@@ -1,4 +1,5 @@
 
+
 export const translations = {
   es: {
     lang_code: "es",
@@ -91,6 +92,7 @@ export const translations = {
     form_conditions_label: "7. Condiciones de Salud (texto o códigos)",
     form_conditions_placeholder: "Ej: Hipertensión, I10, Ansiedad...",
     form_clear_button: "Limpiar",
+    session_restored_toast: "Sesión anterior restaurada.",
     form_save_profile_button: "Guardar Perfil",
     form_update_profile_button: "Actualizar Perfil",
     form_analyzing_button: "Analizando...",
@@ -394,6 +396,7 @@ export const translations = {
     form_conditions_label: "7. Health Conditions (text or codes)",
     form_conditions_placeholder: "e.g., Hypertension, I10, Anxiety...",
     form_clear_button: "Clear",
+    session_restored_toast: "Previous session restored.",
     form_save_profile_button: "Save Profile",
     form_update_profile_button: "Update Profile",
     form_analyzing_button: "Analyzing...",

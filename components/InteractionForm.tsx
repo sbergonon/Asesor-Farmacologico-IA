@@ -1,3 +1,5 @@
+
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
 import { supplementDatabase, type SupplementInfo } from '../data/supplements';
@@ -93,12 +95,12 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     setAdvancedVisible(prev => ({...prev, [index]: !prev[index]}));
   };
   
-  const handleSave = () => {
+  const handleSaveProfile = () => {
     onSaveProfile();
     setShowSaveNotification(true);
     setTimeout(() => setShowSaveNotification(false), 3000);
   };
-
+  
   // --- Allergies State ---
   const [currentAllergy, setCurrentAllergy] = useState('');
   const allergyTags = useMemo(() => allergies.split(',').map(a => a.trim()).filter(Boolean), [allergies]);
@@ -1081,12 +1083,12 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         <div className="relative w-full sm:w-auto">
           <button
               type="button"
-              onClick={handleSave}
+              onClick={handleSaveProfile}
               disabled={isLoading || !patientId.trim()}
               className="w-full sm:w-auto inline-flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
           >
             <SaveIcon className="h-5 w-5 mr-2" />
-            {isExistingProfile ? t.form_update_profile_button : t.form_save_profile_button}
+            {isExistingProfile ? t.form_update_profile_button : t.form_update_profile_button}
           </button>
           {showSaveNotification && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md shadow-lg whitespace-nowrap">

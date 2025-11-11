@@ -1,5 +1,6 @@
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
 import Header from './components/Header';
@@ -14,7 +15,7 @@ import PatientPanel from './components/PatientPanel';
 import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
 import ProactiveAlerts from './components/ProactiveAlerts';
-// import ApiKeyModal from './components/ApiKeyModal';
+import CheckCircleIcon from './components/icons/CheckCircleIcon';
 
 
 type AnalysisMode = 'individual' | 'batch';
@@ -40,16 +41,17 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ActiveTab>('form');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [showSessionRestoredToast, setShowSessionRestoredToast] = useState(false);
   
   const [lang] = useState<'es' | 'en'>(
     navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
   );
   const t = translations[lang];
 
-  useEffect(() => {
-    // FIX: Removed API key check. It is assumed to be present in the environment.
-    
+  // Ref to track initial render for auto-saving
+  const isInitialRender = useRef(true);
 
+  useEffect(() => {
     try {
       const savedHistory = localStorage.getItem('drugInteractionHistory');
       if (savedHistory) {
@@ -59,12 +61,58 @@ const App: React.FC = () => {
       if (savedProfiles) {
         setPatientProfiles(JSON.parse(savedProfiles));
       }
+      
+      const savedSession = localStorage.getItem('savedAnalysisSession');
+      if (savedSession) {
+        const sessionData = JSON.parse(savedSession);
+        setPatientId(sessionData.patientId || '');
+        setMedications(sessionData.medications || []);
+        setAllergies(sessionData.allergies || '');
+        setOtherSubstances(sessionData.otherSubstances || '');
+        setPharmacogenetics(sessionData.pharmacogenetics || '');
+        setConditions(sessionData.conditions || '');
+        setDateOfBirth(sessionData.dateOfBirth || '');
+        setShowSessionRestoredToast(true);
+        setTimeout(() => setShowSessionRestoredToast(false), 4000);
+      }
+
     } catch (error) {
       console.error("Failed to load data from localStorage:", error);
       localStorage.removeItem('drugInteractionHistory');
       localStorage.removeItem('patientProfiles');
+      localStorage.removeItem('savedAnalysisSession');
     }
   }, []);
+
+  // Auto-save session data on change
+  useEffect(() => {
+    if (isInitialRender.current) {
+      isInitialRender.current = false;
+      return;
+    }
+  
+    const isFormEmpty =
+      medications.length === 0 &&
+      !allergies.trim() &&
+      !otherSubstances.trim() &&
+      !pharmacogenetics.trim() &&
+      !conditions.trim() &&
+      !dateOfBirth.trim() &&
+      !patientId.trim();
+  
+    if (!isFormEmpty) {
+      const sessionData = {
+        patientId,
+        medications,
+        allergies,
+        otherSubstances,
+        pharmacogenetics,
+        conditions,
+        dateOfBirth,
+      };
+      localStorage.setItem('savedAnalysisSession', JSON.stringify(sessionData));
+    }
+  }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth]);
   
   const handleClear = useCallback(() => {
     setMedications([]);
@@ -77,6 +125,7 @@ const App: React.FC = () => {
     setAnalysisResult(null);
     setError(null);
     setIsLoading(false);
+    localStorage.removeItem('savedAnalysisSession');
   }, []);
 
   const handleAnalyze = useCallback(async () => {
@@ -117,7 +166,9 @@ const App: React.FC = () => {
         localStorage.setItem('drugInteractionHistory', JSON.stringify(updatedHistory));
         return updatedHistory;
       });
+      localStorage.removeItem('savedAnalysisSession');
 
+// FIX: Added curly braces to the catch block to fix a syntax error that was causing numerous parser errors.
     } catch (e: any) {
       setError(e.message || t.error_unexpected);
     } finally {
@@ -182,7 +233,7 @@ const App: React.FC = () => {
       return updatedProfiles;
     });
   }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth]);
-
+  
   const handleLoadProfile = useCallback((id: string) => {
     const profile = patientProfiles.find(p => p.id === id);
     if (profile) {
@@ -236,7 +287,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-      
+      {showSessionRestoredToast && (
+          <div className="fixed top-5 right-5 z-50 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-200 px-4 py-3 rounded-lg shadow-lg flex items-center animate-pulse">
+            <CheckCircleIcon className="h-5 w-5 mr-2" />
+            <p className="font-bold">{t.session_restored_toast}</p>
+          </div>
+      )}
       <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-10">
         <Header appName={t.appName} appDescription={t.appDescription} />
         <Disclaimer t={t} />

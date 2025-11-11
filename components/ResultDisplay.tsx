@@ -121,16 +121,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [isGeneratingCsv, setIsGeneratingCsv] = useState(false);
   const [copiedItemId, setCopiedItemId] = useState<string | null>(null);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-      summary: true,
-      drugDrug: true,
-      drugSubstance: true,
-      drugAllergy: true,
-      drugCondition: true,
-      drugPharmacogenetic: true,
-      beersCriteria: true,
-      sources: false,
-  });
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const handleToggleSection = (section: string) => {
@@ -290,11 +281,15 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
     
     try {
       // Expand all sections and clear filter to capture the full report
-      const allSectionsExpanded: Record<string, boolean> = {};
-      Object.keys(originalExpandedState).forEach(key => {
-        allSectionsExpanded[key] = true;
+      setExpandedSections({
+          drugDrug: true,
+          drugSubstance: true,
+          drugAllergy: true,
+          drugCondition: true,
+          drugPharmacogenetic: true,
+          beersCriteria: true,
+          sources: true,
       });
-      setExpandedSections(allSectionsExpanded);
       setActiveFilter(null);
 
       // Give React more time to re-render the expanded sections

@@ -184,7 +184,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, removing the dependency on Vite's import.meta.env and the manual key check.
+    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, which resolves the TypeScript error with `import.meta.env`.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
@@ -301,7 +301,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, removing the dependency on Vite's import.meta.env and the manual key check.
+    // FIX: API key is now sourced from process.env.API_KEY as per the guidelines, which resolves the TypeScript error with `import.meta.env`.
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
