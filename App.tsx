@@ -312,7 +312,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
-      {isApiKeyMissing && <ApiKeyModal t={t} />}
+      {isApiKeyMissing && <ApiKeyModal t={t} onClose={() => setIsApiKeyMissing(false)} />}
       {showSessionRestoredToast && (
           <div className="fixed top-5 right-5 z-50 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-200 px-4 py-3 rounded-lg shadow-lg flex items-center animate-pulse">
             <CheckCircleIcon className="h-5 w-5 mr-2" />

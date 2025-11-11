@@ -234,6 +234,8 @@ export const translations = {
     api_key_modal_title: "Configuración de Clave API Requerida",
     api_key_modal_description: "Esta aplicación requiere una clave API de Google Gemini para funcionar. Para continuar, por favor configura una variable de entorno llamada `API_KEY` en los ajustes de tu servicio de hosting (ej. Render, Vercel).",
     api_key_modal_obtaining_link: "Obtener una Clave API de Google AI Studio",
+    api_key_modal_warning: "La funcionalidad de la aplicación estará deshabilitada hasta que se configure la clave.",
+    api_key_modal_close_button: "Cerrar por ahora",
     prompt: {
         role: "Eres un asistente de IA experto en farmacología y farmacia clínica. Tu tarea es realizar un análisis exhaustivo y segmentado de posibles interacciones y contraindicaciones farmacológicas.",
         masterInstruction: "**Instrucción Maestra Obligatoria: Formato de Salida Dual (JSON y Markdown).**",
@@ -274,7 +276,7 @@ export const translations = {
         section5Title: "5. Contraindicaciones por Farmacogenética",
         section5Description: "Detalla aquí las contraindicaciones de los medicamentos basadas en la información farmacogenética proporcionada. Si es relevante, especifica el alelo o variante concreta en el campo 'variantAllele' del JSON.",
         section6Title: "6. Alertas según Criterios de Beers",
-        section6Description: "Si el usuario tiene 65 años o más, detalla aquí los medicamentos potencialmente inapropiados según los Criterios de Beers. Para cada alerta, explica CLARAMENTE el motivo específico (ej., riesgo de caídas, efectos anticolinérgicos) y, de forma crucial, sugiere ALTERNativas TERAPÉuticas MÁS SEGURAS si existen. Si es menor, indica que no aplica.",
+        section6Description: "Si el usuario tiene 65 años o más, detalla aquí los medicamentos potencialmente inapropiados según los Criterios de Beers. Para cada alerta, explica CLARAMENTE el motivo específico (ej., riesgo de caídas, efectos anticolinérgicos) y, de forma crucial, sugiere ALTERNativas TERAPéuticas MÁS SEGURAS si existen. Si es menor, indica que no aplica.",
         finalDisclaimer: "Concluye con el aviso legal: \"**Este análisis es solo para fines informativos y no sustituye el consejo médico profesional. Consulta siempre a un proveedor de atención médica cualificado antes de tomar cualquier decisión sobre tu tratamiento.**\"",
         sourcesSummaryTitle: "Resumen de Fuentes",
         sourcesSummaryInstruction: "Después del aviso legal, añade esta sección. Para cada URL utilizada, usa este formato:",
@@ -537,6 +539,8 @@ export const translations = {
     api_key_modal_title: "API Key Configuration Required",
     api_key_modal_description: "This application requires a Google Gemini API key to function. To proceed, please set up an environment variable named `API_KEY` in your hosting service's settings (e.g., Render, Vercel).",
     api_key_modal_obtaining_link: "Get a Google AI Studio API Key",
+    api_key_modal_warning: "Application functionality will be disabled until the key is configured.",
+    api_key_modal_close_button: "Close for now",
     prompt: {
         role: "You are an expert AI assistant in pharmacology and clinical pharmacy. Your task is to perform a comprehensive and segmented analysis of potential drug interactions and contraindications.",
         masterInstruction: "**Mandatory Master Instruction: Dual Output Format (JSON and Markdown).**",
