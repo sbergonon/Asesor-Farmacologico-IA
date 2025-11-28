@@ -210,7 +210,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -329,7 +329,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     }
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
     });
     
