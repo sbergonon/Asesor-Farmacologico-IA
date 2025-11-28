@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
 import { supplementDatabase, type SupplementInfo } from '../data/supplements';
@@ -267,7 +269,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     t.substance_cranberry_juice,
   ], [t]);
 
-  const { checkedSubstances, customSupplements } = useMemo(() => {
+  const { checkedSubstances, customSupplements } = useMemo<{ checkedSubstances: Set<string>; customSupplements: string[] }>(() => {
     const allItems = otherSubstances.split(',').map(s => s.trim()).filter(Boolean);
     const checked = new Set<string>(allItems.filter(item => predefinedSubstanceList.includes(item)));
     const custom = allItems.filter(item => !predefinedSubstanceList.includes(item));
@@ -280,7 +282,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   };
 
   const handleCheckboxSubstanceChange = (substanceName: string, isChecked: boolean) => {
-    const updatedChecked = new Set(checkedSubstances);
+    const updatedChecked = new Set<string>(checkedSubstances);
     if (isChecked) {
         updatedChecked.add(substanceName);
     } else {
@@ -294,7 +296,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     setCurrentSupplement(value);
     if (value.length > 0) {
       // FIX: Explicitly type the Set to avoid type inference issues and simplify creation.
-      const allAddedSubstances = new Set<string>([...customSupplements, ...checkedSubstances]);
+      const allAddedSubstances = new Set<string>([...customSupplements, ...Array.from(checkedSubstances)]);
       const filtered = supplementDatabase.filter(
         sup => 
           sup.name.toLowerCase().includes(value.toLowerCase()) &&
@@ -638,32 +640,46 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             <PlusIcon className="h-5 w-5" />
             <span className="ml-2 hidden sm:inline">{t.form_add_button}</span>
           </button>
-          {(suggestions.length > 0 || isFetchingMeds) && (
+          {(suggestions.length > 0 || isFetchingMeds || (debouncedMedSearch.length > 1 && !isFetchingMeds)) && (
             <ul className="absolute top-full left-0 right-0 z-10 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white dark:bg-slate-800 py-1 text-base shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none sm:text-sm">
               {isFetchingMeds ? (
                 <li className="relative cursor-default select-none py-2 px-4 text-slate-500 dark:text-slate-400">Searching...</li>
               ) : (
-                suggestions.map((suggestion, index) => (
-                  <li
-                    key={`${suggestion.name}-${index}`}
-                    className={`relative cursor-default select-none py-2 px-4 transition-colors duration-150 ${
-                      index === activeSuggestionIndex 
-                      ? 'bg-blue-500 text-white' 
-                      : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
-                    }`}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    onMouseEnter={() => setActiveSuggestionIndex(index)}
-                  >
-                    <p className="font-medium truncate">{suggestion.name}</p>
-                    <p className={`text-xs truncate ${index === activeSuggestionIndex ? 'text-blue-200' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {suggestion.subtitle || [suggestion.commonDosage, suggestion.commonFrequency].filter(Boolean).join(', ')}
-                    </p>
-                  </li>
-                ))
+                <>
+                  {suggestions.map((suggestion, index) => (
+                    <li
+                      key={`${suggestion.name}-${index}`}
+                      className={`relative cursor-default select-none py-2 px-4 transition-colors duration-150 ${
+                        index === activeSuggestionIndex 
+                        ? 'bg-blue-500 text-white' 
+                        : 'text-slate-900 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700'
+                      }`}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      onMouseEnter={() => setActiveSuggestionIndex(index)}
+                    >
+                      <p className="font-medium truncate">{suggestion.name}</p>
+                      <p className={`text-xs truncate ${index === activeSuggestionIndex ? 'text-blue-200' : 'text-slate-500 dark:text-slate-400'}`}>
+                          {suggestion.subtitle || [suggestion.commonDosage, suggestion.commonFrequency].filter(Boolean).join(', ')}
+                      </p>
+                    </li>
+                  ))}
+                  {/* Manual Entry Option if no suggestions or just always present if not an exact match */}
+                  {(!suggestions.some(s => s.name.toLowerCase() === currentMedication.toLowerCase())) && (
+                      <li
+                          className="relative cursor-pointer select-none py-2 px-4 text-blue-600 dark:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 border-t border-slate-100 dark:border-slate-700"
+                          onClick={() => handleAddMedication()}
+                      >
+                          <div className="flex items-center">
+                              <PlusIcon className="h-4 w-4 mr-2" />
+                              <span className="font-medium">Usar "{currentMedication}"</span>
+                          </div>
+                          <p className="text-xs text-slate-500 dark:text-slate-500 ml-6">
+                              Añadir manualmente (la IA lo analizará igual)
+                          </p>
+                      </li>
+                  )}
+                </>
               )}
-               { !isFetchingMeds && suggestions.length === 0 && debouncedMedSearch.length > 1 && (
-                  <li className="relative cursor-default select-none py-2 px-4 text-slate-500 dark:text-slate-400">No results found.</li>
-                )}
             </ul>
           )}
         </div>

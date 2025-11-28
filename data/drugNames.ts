@@ -1,4 +1,5 @@
 
+
 export interface DrugInfo {
   name: string;
   commonDosage?: string;
@@ -15,6 +16,11 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Albuterol", commonDosage: "90 mcg/actuation", commonFrequency: "2 puffs q4-6h PRN" },
     { name: "Omeprazole", commonDosage: "20 mg", commonFrequency: "once daily" },
     { name: "Losartan", commonDosage: "50 mg", commonFrequency: "once daily" },
+    { name: "Valsartan", commonDosage: "160 mg", commonFrequency: "once daily" },
+    { name: "Candesartan", commonDosage: "16 mg", commonFrequency: "once daily" },
+    { name: "Irbesartan", commonDosage: "150 mg", commonFrequency: "once daily" },
+    { name: "Telmisartan", commonDosage: "40 mg", commonFrequency: "once daily" },
+    { name: "Olmesartan", commonDosage: "20 mg", commonFrequency: "once daily" },
     { name: "Simvastatin", commonDosage: "40 mg", commonFrequency: "once daily (PM)" },
     { name: "Gabapentin", commonDosage: "300 mg", commonFrequency: "three times daily" },
     { name: "Hydrochlorothiazide", commonDosage: "25 mg", commonFrequency: "once daily" },
@@ -26,6 +32,8 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Azithromycin", commonDosage: "500 mg", commonFrequency: "once daily for 3 days" },
     { name: "Prednisone", commonDosage: "10 mg", commonFrequency: "once daily" },
     { name: "Insulin glargine", commonDosage: "10 units", commonFrequency: "once daily at bedtime" },
+    { name: "Insulin aspart", commonDosage: "varied", commonFrequency: "with meals" },
+    { name: "Insulin lispro", commonDosage: "varied", commonFrequency: "with meals" },
     { name: "Sertraline", commonDosage: "50 mg", commonFrequency: "once daily" },
     { name: "Furosemide", commonDosage: "40 mg", commonFrequency: "once daily" },
     { name: "Tamsulosin", commonDosage: "0.4 mg", commonFrequency: "once daily" },
@@ -48,6 +56,7 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Apixaban", commonDosage: "5 mg", commonFrequency: "twice daily" },
     { name: "Rivaroxaban", commonDosage: "20 mg", commonFrequency: "once daily with food" },
     { name: "Dabigatran", commonDosage: "150 mg", commonFrequency: "twice daily" },
+    { name: "Edoxaban", commonDosage: "60 mg", commonFrequency: "once daily" },
     { name: "Montelukast", commonDosage: "10 mg", commonFrequency: "once daily in evening" },
     { name: "Fluticasone", commonDosage: "50 mcg/spray", commonFrequency: "1-2 sprays per nostril daily" },
     { name: "Budesonide" },
@@ -55,13 +64,18 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Pravastatin", commonDosage: "40 mg", commonFrequency: "once daily" },
     { name: "Ezetimibe", commonDosage: "10 mg", commonFrequency: "once daily" },
     { name: "Sitagliptin", commonDosage: "100 mg", commonFrequency: "once daily" },
+    { name: "Linagliptin", commonDosage: "5 mg", commonFrequency: "once daily" },
     { name: "Empagliflozin", commonDosage: "10 mg", commonFrequency: "once daily" },
     { name: "Dapagliflozin", commonDosage: "10 mg", commonFrequency: "once daily" },
+    { name: "Canagliflozin", commonDosage: "100 mg", commonFrequency: "once daily" },
     { name: "Dulaglutide", commonDosage: "1.5 mg", commonFrequency: "once weekly" },
     { name: "Semaglutide", commonDosage: "1 mg", commonFrequency: "once weekly" },
     { name: "Liraglutide", commonDosage: "1.8 mg", commonFrequency: "once daily" },
+    { name: "Tirzepatide", commonDosage: "5 mg", commonFrequency: "once weekly" },
     { name: "Allopurinol", commonDosage: "300 mg", commonFrequency: "once daily" },
     { name: "Pantoprazole", commonDosage: "40 mg", commonFrequency: "once daily" },
+    { name: "Esomeprazole", commonDosage: "40 mg", commonFrequency: "once daily" },
+    { name: "Lansoprazole", commonDosage: "30 mg", commonFrequency: "once daily" },
     { name: "Ranitidine" },
     { name: "Famotidine", commonDosage: "20 mg", commonFrequency: "twice daily" },
     { name: "Trazodone", commonDosage: "50 mg", commonFrequency: "at bedtime" },
@@ -72,6 +86,8 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Nortriptyline" },
     { name: "Carvedilol", commonDosage: "12.5 mg", commonFrequency: "twice daily" },
     { name: "Atenolol", commonDosage: "50 mg", commonFrequency: "once daily" },
+    { name: "Bisoprolol", commonDosage: "5 mg", commonFrequency: "once daily" },
+    { name: "Nebivolol", commonDosage: "5 mg", commonFrequency: "once daily" },
     { name: "Spironolactone", commonDosage: "25 mg", commonFrequency: "once daily" },
     { name: "Finasteride", commonDosage: "5 mg", commonFrequency: "once daily" },
     { name: "Doxycycline", commonDosage: "100 mg", commonFrequency: "twice daily" },
@@ -107,4 +123,5 @@ export const drugDatabase: DrugInfo[] = [
     { name: "Olanzapine" },
     { name: "Risperidone" },
     { name: "Aripiprazole" },
+    { name: "Sacubitril/valsartan", commonDosage: "49/51 mg", commonFrequency: "twice daily" }
 ];

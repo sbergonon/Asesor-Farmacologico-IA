@@ -124,6 +124,28 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
+  // CRITICAL FIX: useMemo MUST be called before any conditional return statements.
+  const summaryCounts = useMemo(() => {
+    if (!analysisResult) return {};
+    const counts: Record<string, number> = {};
+    const allItems: AnyInteraction[] = [
+      ...(analysisResult.drugDrugInteractions || []),
+      ...(analysisResult.drugSubstanceInteractions || []),
+      ...(analysisResult.drugAllergyAlerts || []),
+      ...(analysisResult.drugConditionContraindications || []),
+      ...(analysisResult.drugPharmacogeneticContraindications || []),
+      ...(analysisResult.beersCriteriaAlerts || []),
+    ];
+
+    allItems.forEach(item => {
+      const risk = item.riskLevel;
+      if (risk) {
+        counts[risk] = (counts[risk] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [analysisResult]);
+
   const handleToggleSection = (section: string) => {
       setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
@@ -461,27 +483,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
   
   const criticalSummaryMatch = analysisResult.analysisText.match(new RegExp(`### ${t.prompt.criticalSummaryTitle}([\\s\\S]*?)(?=### \\d\\.|\\n---|$)`));
   const criticalSummary = criticalSummaryMatch ? `### ${t.prompt.criticalSummaryTitle}\n${criticalSummaryMatch[1].trim()}` : analysisResult.analysisText.split(/### \d\.|\n---/)[0];
-
-  const summaryCounts = useMemo(() => {
-    if (!analysisResult) return {};
-    const counts: Record<string, number> = {};
-    const allItems: AnyInteraction[] = [
-      ...(analysisResult.drugDrugInteractions || []),
-      ...(analysisResult.drugSubstanceInteractions || []),
-      ...(analysisResult.drugAllergyAlerts || []),
-      ...(analysisResult.drugConditionContraindications || []),
-      ...(analysisResult.drugPharmacogeneticContraindications || []),
-      ...(analysisResult.beersCriteriaAlerts || []),
-    ];
-
-    allItems.forEach(item => {
-      const risk = item.riskLevel;
-      if (risk) {
-        counts[risk] = (counts[risk] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [analysisResult]);
 
   return (
     <>
