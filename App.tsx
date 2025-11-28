@@ -73,9 +73,14 @@ const App: React.FC = () => {
   
   useEffect(() => {
     // Check for API Key on initial load.
-    // This environment variable is expected to be injected by the build process.
-    if (!process.env.API_KEY) {
-      console.error("API Key is missing. Please set the API_KEY environment variable.");
+    // Support both API_KEY (standard) and VITE_GEMINI_API_KEY (Vite/Render standard)
+    const hasApiKey = 
+      (typeof process !== 'undefined' && process.env?.API_KEY) || 
+      // @ts-ignore
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY);
+
+    if (!hasApiKey) {
+      console.error("API Key is missing. Please set VITE_GEMINI_API_KEY environment variable.");
       setIsApiKeyMissing(true);
       setIsApiKeyModalVisible(true);
       return; // Stop further execution of this effect if key is missing

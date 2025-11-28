@@ -15,6 +15,25 @@ import type {
 import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
 
+// Helper to safely get the API key from various environments (Node/Vite)
+const getApiKey = (): string | undefined => {
+  try {
+    // Priority 1: process.env.API_KEY (Standard/System Prompt)
+    if (typeof process !== 'undefined' && process.env?.API_KEY) {
+      return process.env.API_KEY;
+    }
+    // Priority 2: import.meta.env.VITE_GEMINI_API_KEY (Vite Standard)
+    // @ts-ignore - Handle Vite types if not explicitly defined
+    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
+      // @ts-ignore
+      return import.meta.env.VITE_GEMINI_API_KEY;
+    }
+  } catch (e) {
+    console.warn("Error accessing environment variables", e);
+  }
+  return undefined;
+};
+
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
   const t = translations[lang];
@@ -183,7 +202,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    const apiKey = process.env.API_KEY;
+    const apiKey = getApiKey();
     if (!apiKey) {
       throw new ApiKeyError(t.error_api_key_invalid);
     }
@@ -304,7 +323,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    const apiKey = process.env.API_KEY;
+    const apiKey = getApiKey();
     if (!apiKey) {
       throw new ApiKeyError(t.error_api_key_invalid);
     }
