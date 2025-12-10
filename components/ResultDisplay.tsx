@@ -322,7 +322,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
       await new Promise(resolve => setTimeout(resolve, 300));
 
       const canvas = await html2canvas(elementToCapture, {
-        scale: 2,
+        scale: 1.5, // Reduced from 2 to 1.5 to help with file size while keeping readability
         logging: false,
         useCORS: true,
         backgroundColor: window.getComputedStyle(document.body).backgroundColor,
@@ -340,7 +340,9 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
         },
       });
 
-      const imgData = canvas.toDataURL('image/png');
+      // Use JPEG with 0.75 quality compression instead of PNG
+      const imgData = canvas.toDataURL('image/jpeg', 0.75);
+      
       const pdf = new jsPDF({
         orientation: 'p',
         unit: 'mm',
@@ -358,14 +360,14 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
       let position = 0;
 
       // Add the first page
-      pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+      pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfHeight;
 
       // Add new pages if content is taller than one page
       while (heightLeft > 0) {
         position -= pdfHeight;
         pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, imgHeight);
+        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
       }
 

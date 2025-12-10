@@ -241,7 +241,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
-        // Adjust safety settings to prevent blocking medical content
+        // Robust safety settings for medical content
         safetySettings: [
             {
                 category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
@@ -259,16 +259,28 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
                 category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
                 threshold: 'BLOCK_ONLY_HIGH',
             },
+            {
+                category: 'HARM_CATEGORY_CIVIC_INTEGRITY',
+                threshold: 'BLOCK_ONLY_HIGH',
+            },
         ],
       },
     });
 
     const fullText = response.text;
     
+    // Improved error handling for empty responses (blocks/filters)
     if (!fullText) {
-      if (response?.candidates?.[0]?.finishReason === 'SAFETY') {
+      const candidate = response.candidates?.[0];
+      if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'RECITATION') {
         throw new Error(t.error_safety_block);
       }
+      // Fallback check: sometimes safety ratings are present even if finishReason isn't explicit
+      const blockingRating = candidate?.safetyRatings?.find(r => r.probability === 'HIGH' || r.probability === 'MEDIUM');
+      if (blockingRating) {
+          throw new Error(t.error_safety_block);
+      }
+      
       throw new Error(t.error_no_response);
     }
 
