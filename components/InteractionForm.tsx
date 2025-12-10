@@ -1,7 +1,5 @@
 
 
-
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
 import { supplementDatabase, type SupplementInfo } from '../data/supplements';
@@ -18,6 +16,9 @@ import CheckCircleIcon from './icons/CheckCircleIcon';
 import AlertTriangleIcon from './icons/AlertTriangleIcon';
 import { drugSynonymMap } from '../data/drugSynonyms';
 import { commonConditions } from '../data/conditions';
+import ProBadge from './ProBadge';
+import { getSimilarityScore } from '../utils/fuzzy';
+import ProactiveAlerts from './ProactiveAlerts';
 
 interface InteractionFormProps {
   patientId: string;
@@ -61,6 +62,7 @@ function useDebounce<T>(value: T, delay: number): T {
 interface DisplaySuggestion extends DrugInfo {
   subtitle?: string;
   source: 'local' | 'api';
+  similarity?: number; // Added for internal sorting
 }
 
 
@@ -97,6 +99,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const autocompleteRef = useRef<HTMLDivElement>(null);
   const [advancedVisible, setAdvancedVisible] = useState<Record<number, boolean>>({});
   const [showSaveNotification, setShowSaveNotification] = useState(false);
+  const [duplicateMedError, setDuplicateMedError] = useState<string | null>(null);
 
   const toggleAdvanced = (index: number) => {
     setAdvancedVisible(prev => ({...prev, [index]: !prev[index]}));
@@ -396,16 +399,23 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
   const handleAddMedication = () => {
     const medToAdd = currentMedication.trim();
-    if (medToAdd && !medications.some(m => m.name.toLowerCase() === medToAdd.toLowerCase())) {
-      setMedications([...medications, { name: medToAdd, dosage: '', frequency: '', potentialEffects: '', recommendations: '', references: '' }]);
-      setCurrentMedication('');
-      setSuggestions([]);
+    if (!medToAdd) return;
+    
+    if (medications.some(m => m.name.toLowerCase() === medToAdd.toLowerCase())) {
+        setDuplicateMedError(t.form_med_duplicate_error);
+        return;
     }
+
+    setMedications([...medications, { name: medToAdd, dosage: '', frequency: '', potentialEffects: '', recommendations: '', references: '' }]);
+    setCurrentMedication('');
+    setSuggestions([]);
+    setDuplicateMedError(null);
   };
   
   const handleMedicationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCurrentMedication(e.target.value);
     setActiveSuggestionIndex(0);
+    if (duplicateMedError) setDuplicateMedError(null);
   };
 
   useEffect(() => {
@@ -420,13 +430,22 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       const queryLower = debouncedMedSearch.toLowerCase();
       const genericName = drugSynonymMap[queryLower];
 
-      // 1. Local search from our curated database
+      // 1. Local search from our curated database with Fuzzy Matching
       const localSuggestions: DisplaySuggestion[] = drugDatabase
+        .map(drug => {
+            const drugLower = drug.name.toLowerCase();
+            const similarity = getSimilarityScore(drugLower, queryLower);
+            return { ...drug, source: 'local', similarity };
+        })
         .filter(drug => {
             const drugLower = drug.name.toLowerCase();
-            return drugLower.includes(queryLower) || (genericName && drugLower.includes(genericName.toLowerCase()));
-        })
-        .map(drug => ({ ...drug, source: 'local' }));
+            const isMatch = 
+                drugLower.includes(queryLower) || 
+                (genericName && drugLower.includes(genericName.toLowerCase())) ||
+                // Allow fuzzy matches if similarity is reasonably high (e.g. > 0.6)
+                (drug.similarity && drug.similarity > 0.6); 
+            return isMatch;
+        }) as DisplaySuggestion[];
 
       // 2. API search from openFDA for broader results
       let apiSuggestions: DisplaySuggestion[] = [];
@@ -480,6 +499,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       const sortedSuggestions = Array.from(combined.values())
         .map((s) => {
             const suggestion: DisplaySuggestion = { ...s };
+            // Calculate similarity if missing (e.g. from API source) for sorting purposes
+            if (suggestion.similarity === undefined) {
+                suggestion.similarity = getSimilarityScore(suggestion.name.toLowerCase(), queryLower);
+            }
+
             if (genericName && s.name.toLowerCase() === genericName.toLowerCase()) {
                 suggestion.subtitle = `Generic for ${toTitleCase(debouncedMedSearch)}`;
             }
@@ -495,7 +519,12 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                 if (itemLower === queryLower) score += 100; // Exact match
                 else if (genericLower && itemLower === genericLower) score += 90; // Exact generic match
                 else if (itemLower.startsWith(queryLower)) score += 50; // Starts with query
-                else if (itemLower.includes(queryLower)) score += 5; // Contains query
+                else if (itemLower.includes(queryLower)) score += 20; // Contains query
+
+                // Fuzzy Similarity score component (weighted)
+                if (item.similarity) {
+                    score += item.similarity * 40; 
+                }
 
                 // Source & Quality score
                 if (item.source === 'local') score += 30; // Boost local results more
@@ -522,18 +551,24 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   }, [debouncedMedSearch, medications]);
 
   const handleSuggestionClick = (suggestion: DisplaySuggestion) => {
-    if (suggestion && !medications.some(m => m.name.toLowerCase() === suggestion.name.toLowerCase())) {
-      setMedications([...medications, {
+    if (medications.some(m => m.name.toLowerCase() === suggestion.name.toLowerCase())) {
+        setDuplicateMedError(t.form_med_duplicate_error);
+        setSuggestions([]);
+        return;
+    }
+    
+    setMedications([...medications, {
         name: suggestion.name,
         dosage: suggestion.commonDosage || '',
         frequency: suggestion.commonFrequency || '',
         potentialEffects: '',
         recommendations: '',
         references: '',
-      }]);
-    }
+    }]);
+    
     setCurrentMedication('');
     setSuggestions([]);
+    setDuplicateMedError(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -683,6 +718,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             </ul>
           )}
         </div>
+        {duplicateMedError && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400 font-medium animate-pulse">
+                {duplicateMedError}
+            </p>
+        )}
         <div className="mt-3 space-y-3">
           {medications.map((med, index) => (
             <div key={index} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -721,10 +761,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                       />
                   </div>
               </div>
-              <div className="mt-2">
+              <div className="mt-2 flex items-center">
                   <button type="button" onClick={() => toggleAdvanced(index)} className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline focus:outline-none">
                       {advancedVisible[index] ? t.form_hide_optional_details : t.form_add_optional_details}
                   </button>
+                  <ProBadge />
               </div>
               {advancedVisible[index] && (
                   <div className="mt-2 space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700">
@@ -958,7 +999,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-          {t.form_pharmacogenetics_label}
+          {t.form_pharmacogenetics_label} <ProBadge />
         </label>
         <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
@@ -968,7 +1009,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                 id="pgx-gene" 
                 value={selectedGene}
                 onChange={(e) => setSelectedGene(e.target.value)}
-                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
+                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200 border-slate-300"
               >
                 <option value="">{t.form_pgx_select_gene}</option>
                 {Object.entries(pgxGeneGroups).map(([groupName, genes]) => (
@@ -1097,6 +1138,14 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         </div>
       </div>
       
+      {/* Proactive Alerts Section - Integrated inside form for immediate feedback */}
+      <ProactiveAlerts 
+        medications={medications}
+        allergies={allergies}
+        conditions={conditions}
+        t={t}
+      />
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end sm:space-x-4 space-y-3 sm:space-y-0 pt-4 border-t border-slate-200 dark:border-slate-700">
         <div className="flex-grow">
             {isApiKeyMissing && (

@@ -1,10 +1,15 @@
+
+
 import React from 'react';
 import DocumentTextIcon from './icons/DocumentTextIcon';
 import HistoryIcon from './icons/HistoryIcon';
 import UserGroupIcon from './icons/UserGroupIcon';
 import ChartBarIcon from './icons/ChartBarIcon';
+import { useAuth } from '../contexts/AuthContext';
+import ProBadge from './ProBadge';
+import CogIcon from './icons/CogIcon';
 
-type TabId = 'form' | 'patients' | 'history' | 'dashboard';
+type TabId = 'form' | 'patients' | 'history' | 'dashboard' | 'admin';
 
 interface TabSelectorProps {
   activeTab: TabId;
@@ -13,12 +18,46 @@ interface TabSelectorProps {
 }
 
 const TabSelector: React.FC<TabSelectorProps> = ({ activeTab, setActiveTab, t }) => {
+  const { permissions } = useAuth();
+  
+  // Define available tabs
   const tabs = [
-    { id: 'form', name: t.tab_new_analysis, icon: DocumentTextIcon },
-    { id: 'patients', name: t.tab_patients, icon: UserGroupIcon },
-    { id: 'history', name: t.tab_history, icon: HistoryIcon },
-    { id: 'dashboard', name: t.tab_dashboard, icon: ChartBarIcon },
+    { 
+      id: 'form', 
+      name: t.tab_new_analysis, 
+      icon: DocumentTextIcon, 
+      isVisible: true 
+    },
+    { 
+      id: 'patients', 
+      name: t.tab_patients, 
+      icon: UserGroupIcon, 
+      isVisible: permissions.canManagePatients, // Restricted to Pro/Admin
+      isPro: true
+    },
+    { 
+      id: 'history', 
+      name: t.tab_history, 
+      icon: HistoryIcon, 
+      isVisible: true 
+    },
+    { 
+      id: 'dashboard', 
+      name: t.tab_dashboard, 
+      icon: ChartBarIcon, 
+      isVisible: permissions.canAccessDashboard,
+      isPro: true
+    },
+    {
+      id: 'admin',
+      name: 'Admin',
+      icon: CogIcon,
+      isVisible: permissions.canConfigureSystem, // Admin only
+      isPro: false
+    }
   ];
+
+  const visibleTabs = tabs.filter(tab => tab.isVisible);
 
   const getButtonClass = (tabId: TabId) => {
     const baseClass = "w-full sm:w-auto flex-1 sm:flex-none inline-flex items-center justify-center px-4 py-3 font-medium text-sm rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-blue-500";
@@ -30,7 +69,7 @@ const TabSelector: React.FC<TabSelectorProps> = ({ activeTab, setActiveTab, t })
 
   return (
     <div className="p-1.5 bg-slate-100 dark:bg-slate-800/50 rounded-xl flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-      {tabs.map(tab => (
+      {visibleTabs.map(tab => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id as TabId)}
@@ -38,6 +77,7 @@ const TabSelector: React.FC<TabSelectorProps> = ({ activeTab, setActiveTab, t })
         >
           <tab.icon className="h-5 w-5 mr-2" />
           {tab.name}
+          {tab.isPro && <ProBadge />}
         </button>
       ))}
     </div>

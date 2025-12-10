@@ -1,3 +1,5 @@
+
+
 import { GoogleGenAI } from "@google/genai";
 import type { 
     GroundingChunk, 
@@ -10,7 +12,8 @@ import type {
     DrugPharmacogeneticContraindication,
     BeersCriteriaAlert,
     Medication,
-    SupplementInteraction
+    SupplementInteraction,
+    SystemSettings
 } from '../types';
 import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
@@ -34,9 +37,21 @@ const getApiKey = (): string | undefined => {
   return undefined;
 };
 
+// Retrieve admin settings (Mocked via localStorage for now as Firestore sync requires more logic)
+const getSystemConfig = (): SystemSettings => {
+    try {
+        const stored = localStorage.getItem('system_config');
+        if (stored) return JSON.parse(stored);
+    } catch(e) {}
+    // Default config
+    return { prioritySources: '', excludedSources: '', safetyStrictness: 'standard' };
+};
+
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
   const t = translations[lang];
+  const config = getSystemConfig();
+
   const medList = medications.map(med => {
       let medStr = med.name;
       const details = [med.dosage, med.frequency].filter(Boolean).join(', ');
@@ -62,8 +77,21 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
   const conditionsText = conditions.trim() ? `${t.prompt.preexistingConditions}: ${conditions}. ${t.prompt.conditionsNote}` : t.prompt.noPreexistingConditions;
   const dobText = dateOfBirth.trim() ? `${t.prompt.dob}: ${dateOfBirth}. ${t.prompt.dobNote}` : t.prompt.noDob;
 
+  // Admin Configuration Injections
+  let sourceInstruction = "";
+  if (config.prioritySources) {
+      sourceInstruction += `\n- **PRIORITY SOURCES:** Prioritize information from these domains: ${config.prioritySources}.`;
+  }
+  if (config.excludedSources) {
+      sourceInstruction += `\n- **EXCLUDED SOURCES:** Do NOT use information or cite these domains: ${config.excludedSources}.`;
+  }
+  if (config.safetyStrictness === 'strict') {
+      sourceInstruction += `\n- **SAFETY LEVEL: STRICT.** Flag ANY potential interaction even if theoretical.`;
+  }
+
   return `
     ${t.prompt.role}
+    ${sourceInstruction}
 
     ${t.prompt.masterInstruction}
     ${t.prompt.part1}

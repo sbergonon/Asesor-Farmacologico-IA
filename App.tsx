@@ -1,5 +1,15 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
+import { 
+  getHistory, 
+  saveHistoryItem, 
+  clearHistory as dbClearHistory,
+  getPatientProfiles,
+  savePatientProfile,
+  deletePatientProfile as dbDeleteProfile
+} from './services/db';
+import { useAuth } from './contexts/AuthContext';
 import type { AnalysisResult, HistoryItem, Medication, PatientProfile } from './types';
 import { ApiKeyError } from './types';
 import Header from './components/Header';
@@ -9,19 +19,26 @@ import ResultDisplay from './components/ResultDisplay';
 import HistoryPanel from './components/HistoryPanel';
 import TabSelector from './components/TabSelector';
 import TermsModal from './components/TermsModal';
+import ManualModal from './components/ManualModal';
 import BatchAnalysis from './components/BatchAnalysis';
 import PatientPanel from './components/PatientPanel';
 import ApiKeyModal from './components/ApiKeyModal';
+import Login from './components/Login';
 import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
-import ProactiveAlerts from './components/ProactiveAlerts';
 import CheckCircleIcon from './components/icons/CheckCircleIcon';
+import ProBadge from './components/ProBadge';
+import RestrictedFeatureWrapper from './components/RestrictedFeatureWrapper';
+import AdminPanel from './components/AdminPanel';
+import DocumentTextIcon from './components/icons/DocumentTextIcon';
 
 
 type AnalysisMode = 'individual' | 'batch';
-type ActiveTab = 'form' | 'patients' | 'history' | 'dashboard';
+type ActiveTab = 'form' | 'patients' | 'history' | 'dashboard' | 'admin';
 
 const App: React.FC = () => {
+  const { user, permissions, loading: authLoading } = useAuth();
+  
   // Estado para el modo Individual
   const [medications, setMedications] = useState<Medication[]>([]);
   const [allergies, setAllergies] = useState('');
@@ -36,23 +53,16 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   // Estado general y de la UI
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
-    try {
-      const savedHistory = localStorage.getItem('drugInteractionHistory');
-      return savedHistory ? JSON.parse(savedHistory) : [];
-    } catch (error) {
-      console.error("Failed to load history from localStorage:", error);
-      localStorage.removeItem('drugInteractionHistory');
-      return [];
-    }
-  });
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [patientProfiles, setPatientProfiles] = useState<PatientProfile[]>([]);
   const [activeTab, setActiveTab] = useState<ActiveTab>('form');
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [showSessionRestoredToast, setShowSessionRestoredToast] = useState(false);
   const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   
   const [lang] = useState<'es' | 'en'>(
     navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
@@ -62,18 +72,8 @@ const App: React.FC = () => {
   // Ref to track initial render for auto-saving
   const isInitialRender = useRef(true);
 
-  // Persist history to localStorage whenever it changes
+  // Check API Key
   useEffect(() => {
-    try {
-      localStorage.setItem('drugInteractionHistory', JSON.stringify(history));
-    } catch (error) {
-      console.error("Failed to save history to localStorage:", error);
-    }
-  }, [history]);
-  
-  useEffect(() => {
-    // Check for API Key on initial load.
-    // Support both API_KEY (standard) and VITE_GEMINI_API_KEY (Vite/Render standard)
     const hasApiKey = 
       (typeof process !== 'undefined' && process.env?.API_KEY) || 
       // @ts-ignore
@@ -83,15 +83,58 @@ const App: React.FC = () => {
       console.error("API Key is missing. Please set VITE_GEMINI_API_KEY environment variable.");
       setIsApiKeyMissing(true);
       setIsApiKeyModalVisible(true);
-      return; // Stop further execution of this effect if key is missing
     }
+  }, []);
 
-    try {
-      const savedProfiles = localStorage.getItem('patientProfiles');
-      if (savedProfiles) {
-        setPatientProfiles(JSON.parse(savedProfiles));
+  // Access Control Guard
+  useEffect(() => {
+    if (activeTab === 'dashboard' && !permissions.canAccessDashboard) {
+        setActiveTab('form');
+    }
+    if (activeTab === 'patients' && !permissions.canManagePatients) {
+        setActiveTab('form');
+    }
+    if (activeTab === 'admin' && !permissions.canConfigureSystem) {
+        setActiveTab('form');
+    }
+    if (analysisMode === 'batch' && !permissions.canAccessBatchAnalysis) {
+        setAnalysisMode('individual');
+    }
+  }, [activeTab, analysisMode, permissions]);
+
+  // Load Data from Firestore when user logs in
+  useEffect(() => {
+    const loadData = async () => {
+      if (user) {
+        setIsDataLoading(true);
+        try {
+          // Parallel loading of history and profiles
+          // Only load profiles if user has permission
+          const promises: Promise<any>[] = [getHistory(user.uid)];
+          if (permissions.canManagePatients) {
+            promises.push(getPatientProfiles(user.uid));
+          }
+
+          const results = await Promise.all(promises);
+          setHistory(results[0]);
+          if (results[1]) setPatientProfiles(results[1]);
+
+        } catch (error) {
+          console.error("Failed to load data from Firebase:", error);
+        } finally {
+          setIsDataLoading(false);
+        }
+      } else {
+        setHistory([]);
+        setPatientProfiles([]);
       }
-      
+    };
+    loadData();
+  }, [user, permissions.canManagePatients]);
+
+  // Load local session (just draft data, still using localStorage for temporary draft)
+  useEffect(() => {
+    try {
       const savedSession = localStorage.getItem('savedAnalysisSession');
       if (savedSession) {
         const sessionData = JSON.parse(savedSession);
@@ -105,15 +148,13 @@ const App: React.FC = () => {
         setShowSessionRestoredToast(true);
         setTimeout(() => setShowSessionRestoredToast(false), 4000);
       }
-
     } catch (error) {
-      console.error("Failed to load data from localStorage:", error);
-      localStorage.removeItem('patientProfiles');
+      console.error("Failed to load session:", error);
       localStorage.removeItem('savedAnalysisSession');
     }
   }, []);
 
-  // Auto-save session data on change
+  // Auto-save session draft to localStorage
   useEffect(() => {
     if (isInitialRender.current) {
       isInitialRender.current = false;
@@ -157,9 +198,12 @@ const App: React.FC = () => {
     localStorage.removeItem('savedAnalysisSession');
   }, []);
 
-  const addHistoryItem = useCallback((item: HistoryItem) => {
+  const addHistoryItem = useCallback(async (item: HistoryItem) => {
     setHistory(prevHistory => [item, ...prevHistory]);
-  }, []);
+    if (user) {
+      await saveHistoryItem(user.uid, item);
+    }
+  }, [user]);
   
   const handleApiKeyError = useCallback(() => {
     setIsApiKeyMissing(true);
@@ -204,7 +248,7 @@ const App: React.FC = () => {
         patientId,
       };
       
-      addHistoryItem(newHistoryItem);
+      await addHistoryItem(newHistoryItem);
       localStorage.removeItem('savedAnalysisSession');
 
     } catch (e: any) {
@@ -242,12 +286,15 @@ const App: React.FC = () => {
     setActiveTab('form');
   }, []);
 
-  const handleClearHistory = useCallback(() => {
+  const handleClearHistory = useCallback(async () => {
     setHistory([]);
-  }, []);
+    if (user) {
+      await dbClearHistory(user.uid);
+    }
+  }, [user]);
 
-  const handleSaveOrUpdateProfile = useCallback(() => {
-    if (!patientId.trim()) return;
+  const handleSaveOrUpdateProfile = useCallback(async () => {
+    if (!patientId.trim() || !user) return;
 
     const profileData: PatientProfile = {
       id: patientId.trim(),
@@ -264,17 +311,16 @@ const App: React.FC = () => {
       const existingIndex = prevProfiles.findIndex(p => p.id === profileData.id);
       let updatedProfiles;
       if (existingIndex !== -1) {
-        // Update existing
         updatedProfiles = [...prevProfiles];
         updatedProfiles[existingIndex] = profileData;
       } else {
-        // Add new
         updatedProfiles = [profileData, ...prevProfiles];
       }
-      localStorage.setItem('patientProfiles', JSON.stringify(updatedProfiles));
       return updatedProfiles;
     });
-  }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth]);
+    
+    await savePatientProfile(user.uid, profileData);
+  }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth, user]);
   
   const handleLoadProfile = useCallback((id: string) => {
     const profile = patientProfiles.find(p => p.id === id);
@@ -292,19 +338,20 @@ const App: React.FC = () => {
     }
   }, [patientProfiles]);
 
-  const handleDeleteProfile = useCallback((id: string) => {
-    setPatientProfiles(prevProfiles => {
-      const updatedProfiles = prevProfiles.filter(p => p.id !== id);
-      localStorage.setItem('patientProfiles', JSON.stringify(updatedProfiles));
-      return updatedProfiles;
-    });
-  }, []);
+  const handleDeleteProfile = useCallback(async (id: string) => {
+    setPatientProfiles(prevProfiles => prevProfiles.filter(p => p.id !== id));
+    if (user) {
+      await dbDeleteProfile(user.uid, id);
+    }
+  }, [user]);
   
   const existingPatientIds = useMemo(() => new Set(patientProfiles.map(p => p.id)), [patientProfiles]);
 
+  const canAccessBatch = permissions.canAccessBatchAnalysis;
+
   const AnalysisModeSelector = () => (
-    <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg">
-      <button
+    <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg relative">
+       <button
         onClick={() => setAnalysisMode('individual')}
         className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors w-1/2 ${
           analysisMode === 'individual'
@@ -314,21 +361,45 @@ const App: React.FC = () => {
       >
         {t.mode_individual}
       </button>
-      <button
-        onClick={() => setAnalysisMode('batch')}
-        className={`px-4 py-2 text-sm font-semibold rounded-md transition-colors w-1/2 ${
-          analysisMode === 'batch'
-            ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow'
-            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-600/50'
-        }`}
-      >
-        {t.mode_batch} (Pro)
-      </button>
+      
+      <div className="w-1/2">
+        <RestrictedFeatureWrapper 
+          isAllowed={canAccessBatch} 
+          message="Análisis por Lote requiere cuenta Profesional."
+          className="w-full"
+        >
+          <button
+            onClick={() => canAccessBatch && setAnalysisMode('batch')}
+            className={`w-full px-4 py-2 text-sm font-semibold rounded-md transition-colors flex items-center justify-center ${
+              analysisMode === 'batch'
+                ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-600/50'
+            }`}
+          >
+            {t.mode_batch} 
+            {canAccessBatch && <ProBadge />}
+          </button>
+        </RestrictedFeatureWrapper>
+      </div>
     </div>
   );
 
+  // --- Auth & Loading Gates ---
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login t={t} />;
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex flex-col">
       {isApiKeyModalVisible && <ApiKeyModal t={t} onClose={() => setIsApiKeyModalVisible(false)} />}
       {showSessionRestoredToast && (
           <div className="fixed top-5 right-5 z-50 bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-600 text-green-700 dark:text-green-200 px-4 py-3 rounded-lg shadow-lg flex items-center animate-pulse">
@@ -336,7 +407,7 @@ const App: React.FC = () => {
             <p className="font-bold">{t.session_restored_toast}</p>
           </div>
       )}
-      <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-10">
+      <div className="container mx-auto max-w-4xl px-4 py-6 sm:py-10 flex-grow">
         <Header appName={t.appName} appDescription={t.appDescription} />
         <Disclaimer t={t} />
         
@@ -345,7 +416,14 @@ const App: React.FC = () => {
         </div>
 
         <main className="mt-6">
-            {activeTab === 'form' && (
+            {isDataLoading && (
+               <div className="text-center py-4">
+                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                 <p className="mt-2 text-sm text-slate-500">Loading data...</p>
+               </div>
+            )}
+
+            {!isDataLoading && activeTab === 'form' && (
               <>
                 <AnalysisModeSelector />
                 {analysisMode === 'individual' ? (
@@ -377,13 +455,6 @@ const App: React.FC = () => {
                           />
                       </div>
                       
-                      <ProactiveAlerts 
-                        medications={medications}
-                        allergies={allergies}
-                        conditions={conditions}
-                        t={t}
-                      />
-
                       {error && (
                          <div className="mt-8 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-600 text-red-700 dark:text-red-200 rounded-lg">
                            <p className="font-bold">{t.error_title}</p>
@@ -408,7 +479,7 @@ const App: React.FC = () => {
               </>
             )}
 
-            {activeTab === 'patients' && (
+            {!isDataLoading && activeTab === 'patients' && permissions.canManagePatients && (
                 <PatientPanel
                     profiles={patientProfiles}
                     onLoadProfile={handleLoadProfile}
@@ -417,7 +488,7 @@ const App: React.FC = () => {
                  />
             )}
             
-            {activeTab === 'history' && (
+            {!isDataLoading && activeTab === 'history' && (
                 <HistoryPanel
                     history={history}
                     onLoadHistory={(id) => {
@@ -429,28 +500,42 @@ const App: React.FC = () => {
                  />
             )}
 
-            {activeTab === 'dashboard' && (
+            {!isDataLoading && activeTab === 'dashboard' && permissions.canAccessDashboard && (
                 <DashboardPanel
                     history={history}
                     t={t}
                  />
             )}
+
+            {!isDataLoading && activeTab === 'admin' && permissions.canConfigureSystem && (
+                <AdminPanel t={t} />
+            )}
         </main>
-
-        <footer className="mt-12 text-center text-sm text-slate-500 dark:text-slate-400">
-            <p>{t.footer_disclaimer}</p>
-            <p className="mt-2">
-              <button 
-                  onClick={() => setIsTermsModalOpen(true)} 
-                  className="underline hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
-              >
-                  {t.terms_and_conditions}
-              </button>
-            </p>
-        </footer>
-
-        {isTermsModalOpen && <TermsModal onClose={() => setIsTermsModalOpen(false)} t={t} />}
       </div>
+      
+      <footer className="mt-12 py-6 bg-slate-100 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-500 dark:text-slate-400">
+          <div className="container mx-auto px-4">
+            <p>{t.footer_disclaimer}</p>
+            <div className="mt-4 flex flex-col sm:flex-row justify-center space-y-2 sm:space-y-0 sm:space-x-6">
+                <button 
+                    onClick={() => setIsManualModalOpen(true)} 
+                    className="flex items-center justify-center hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                >
+                    <DocumentTextIcon className="h-4 w-4 mr-1" />
+                    {t.manual_button_title}
+                </button>
+                <button 
+                    onClick={() => setIsTermsModalOpen(true)} 
+                    className="underline hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
+                >
+                    {t.terms_and_conditions}
+                </button>
+            </div>
+          </div>
+      </footer>
+
+      {isTermsModalOpen && <TermsModal onClose={() => setIsTermsModalOpen(false)} t={t} />}
+      {isManualModalOpen && <ManualModal onClose={() => setIsManualModalOpen(false)} />}
     </div>
   );
 };

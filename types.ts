@@ -1,3 +1,5 @@
+
+
 export interface GroundingChunk {
   web?: {
     uri?: string;
@@ -163,4 +165,33 @@ export class ApiKeyError extends Error {
     super(message);
     this.name = 'ApiKeyError';
   }
+}
+
+// --- User & Role Types ---
+export type UserRole = 'personal' | 'professional' | 'admin';
+
+export interface UserPermissions {
+  canAccessDashboard: boolean;
+  canAccessBatchAnalysis: boolean;
+  canManageUsers: boolean;
+  canViewAdvancedHistory: boolean;
+  canExportData: boolean;
+  canManagePatients: boolean;
+  canConfigureSystem: boolean; // For Superuser/Admin
+}
+
+export interface UserProfile {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  role: UserRole;
+  institution?: string; // Optional institution field
+  createdAt: string;
+}
+
+export interface SystemSettings {
+  prioritySources: string; // Comma separated list of domains
+  excludedSources: string; // Comma separated list of domains
+  safetyStrictness: 'standard' | 'strict' | 'loose';
 }
