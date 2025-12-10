@@ -1,5 +1,4 @@
 
-
 import { GoogleGenAI } from "@google/genai";
 import type { 
     GroundingChunk, 
@@ -7,7 +6,7 @@ import type {
     Source, 
     DrugDrugInteraction,
     DrugSubstanceInteraction,
-    DrugAllergyAlert,
+    DrugAllergyAlert, 
     DrugConditionContraindication,
     DrugPharmacogeneticContraindication,
     BeersCriteriaAlert,
@@ -242,6 +241,25 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
+        // Adjust safety settings to prevent blocking medical content
+        safetySettings: [
+            {
+                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
+                threshold: 'BLOCK_ONLY_HIGH', 
+            },
+            {
+                category: 'HARM_CATEGORY_HATE_SPEECH',
+                threshold: 'BLOCK_ONLY_HIGH',
+            },
+            {
+                category: 'HARM_CATEGORY_HARASSMENT',
+                threshold: 'BLOCK_ONLY_HIGH',
+            },
+            {
+                category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                threshold: 'BLOCK_ONLY_HIGH',
+            },
+        ],
       },
     });
 
@@ -332,10 +350,15 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       if (error.message.includes('API key not valid') || error.message.includes('API key is invalid')) {
         throw new ApiKeyError(t.error_api_key_invalid);
       }
-      if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
+      if (error.message.includes(t.error_safety_block_check)) {
         throw error;
       }
-      throw new Error(`${t.error_service_unavailable} - Detalle: ${error.message}`);
+      // If it is 503 or generic fetch failure, it often comes as "TypeError: Failed to fetch"
+      if (error.message.includes('Failed to fetch')) {
+          throw new Error(`${t.error_service_unavailable} (Network Timeout/Error)`);
+      }
+      // Pass through the actual message if we can't map it
+      return Promise.reject(new Error(`${t.error_unexpected}: ${error.message}`));
     }
     
     throw new Error(t.error_service_unavailable);

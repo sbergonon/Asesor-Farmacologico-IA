@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
 import { supplementDatabase, type SupplementInfo } from '../data/supplements';
@@ -19,6 +18,8 @@ import { commonConditions } from '../data/conditions';
 import ProBadge from './ProBadge';
 import { getSimilarityScore } from '../utils/fuzzy';
 import ProactiveAlerts from './ProactiveAlerts';
+import { useAuth } from '../contexts/AuthContext';
+import LockIcon from './icons/LockIcon';
 
 interface InteractionFormProps {
   patientId: string;
@@ -90,6 +91,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   onApiKeyError,
   t,
 }) => {
+  const { permissions } = useAuth();
   const [currentMedication, setCurrentMedication] = useState('');
   const [suggestions, setSuggestions] = useState<DisplaySuggestion[]>([]);
   const [isFetchingMeds, setIsFetchingMeds] = useState(false);
@@ -634,6 +636,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   };
   
   const isExistingProfile = existingPatientIds.has(patientId);
+  const canAccessPgx = permissions.canAccessBatchAnalysis; // Using this permission as proxy for Pro
 
   return (
     <div className={`space-y-6`}>
@@ -997,11 +1000,20 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       </div>
       </div>
 
-      <div>
+      <div className="relative">
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           {t.form_pharmacogenetics_label} <ProBadge />
         </label>
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+        
+        {/* Overlay for non-pro users */}
+        {!canAccessPgx && (
+            <div className="absolute inset-0 z-10 bg-slate-50/50 dark:bg-slate-900/50 backdrop-blur-[1px] flex flex-col items-center justify-center rounded-lg border border-transparent">
+               <LockIcon className="h-8 w-8 text-slate-400 mb-2" />
+               <p className="text-sm font-semibold text-slate-500 dark:text-slate-300">Solo disponible para usuarios Profesionales</p>
+            </div>
+        )}
+
+        <div className={`p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700 ${!canAccessPgx ? 'opacity-50' : ''}`}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
             <div>
               <label htmlFor="pgx-gene" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_pgx_gene_label}</label>
@@ -1009,7 +1021,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                 id="pgx-gene" 
                 value={selectedGene}
                 onChange={(e) => setSelectedGene(e.target.value)}
-                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200 border-slate-300"
+                disabled={!canAccessPgx}
+                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200 border-slate-300 disabled:cursor-not-allowed"
               >
                 <option value="">{t.form_pgx_select_gene}</option>
                 {Object.entries(pgxGeneGroups).map(([groupName, genes]) => (
@@ -1026,8 +1039,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                   type="text"
                   value={variantAllele}
                   onChange={(e) => setVariantAllele(e.target.value)}
+                  disabled={!canAccessPgx}
                   placeholder={t.form_pgx_variant_placeholder}
-                  className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
+                  className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200 disabled:cursor-not-allowed"
               />
             </div>
              <div>
@@ -1036,10 +1050,10 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                 id="pgx-status"
                 value={metabolizerStatus}
                 onChange={(e) => setMetabolizerStatus(e.target.value)}
-                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
+                disabled={!canAccessPgx}
+                className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200 disabled:cursor-not-allowed"
               >
                 <option value="">{t.form_pgx_select_status}</option>
-                {/* FIX: Corrected translation keys for metabolizer status */}
                 <option value="Poor Metabolizer (PM)">{t.form_pgx_status_poor}</option>
                 <option value="Intermediate Metabolizer (IM)">{t.form_pgx_status_intermediate}</option>
                 <option value="Normal Metabolizer (NM)">{t.form_pgx_status_normal}</option>
@@ -1053,8 +1067,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
               <button
                 type="button"
                 onClick={handleAddPgxFactor}
-                disabled={!selectedGene}
-                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors duration-200"
+                disabled={!canAccessPgx || !selectedGene}
+                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors duration-200 disabled:cursor-not-allowed"
               >
                  <PlusIcon className="h-4 w-4 mr-1" />
                 {t.form_pgx_add_button}
