@@ -420,6 +420,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
                   {t.admin_global_export_desc}
               </p>
               
+              <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 p-3 rounded-lg mb-6 flex items-start">
+                  <span className="text-amber-600 dark:text-amber-400 mr-2">⚠️</span>
+                  <p className="text-xs text-amber-800 dark:text-amber-200">
+                      <strong>Nota de Seguridad:</strong> La exportación global filtra automáticamente los datos. Solo se incluyen registros pertenecientes a usuarios verificados con rol <strong>Profesional</strong> o <strong>Admin</strong>. Los datos de cuentas "Personal" se excluyen para garantizar la integridad clínica del estudio.
+                  </p>
+              </div>
+              
               <button
                   onClick={handleGlobalExport}
                   disabled={isExportingGlobal}

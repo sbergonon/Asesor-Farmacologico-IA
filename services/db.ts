@@ -228,19 +228,30 @@ export const updateUserProfile = async (requestingUid: string, targetUid: string
 // --- Global Data Operations (Superuser/Admin) ---
 
 // Gets all patients from ALL users using a Collection Group Query.
-// Requires Firestore index on 'patients' collectionGroup if sorting/filtering, 
-// but for simple dump, basic fetch might work if security rules allow.
+// IMPT: This now FILTERS based on User Role. Only data from 'professional' or 'admin' users is returned.
 export const getGlobalPatientData = async (requestingUid: string): Promise<{user: string, patient: PatientProfile}[]> => {
     if (requestingUid === DEMO_USER_ID) {
         // Return dummy data for demo
         return [
             { user: 'Dr. House', patient: { id: 'P-001', medications: [{name: 'Vicodin', dosage: '50mg', frequency: 'PRN'}], allergies: 'None', otherSubstances: '', conditions: 'Chronic Pain', dateOfBirth: '1959-05-15', pharmacogenetics: '', lastUpdated: new Date().toISOString() } },
             { user: 'Dr. House', patient: { id: 'P-002', medications: [{name: 'Lupus meds', dosage: '', frequency: ''}], allergies: 'None', otherSubstances: '', conditions: 'Lupus', dateOfBirth: '1980-01-01', pharmacogenetics: '', lastUpdated: new Date().toISOString() } },
-            { user: 'Student', patient: { id: 'TEST-1', medications: [{name: 'Ibuprofen', dosage: '400mg', frequency: ''}], allergies: '', otherSubstances: '', conditions: 'Headache', dateOfBirth: '1990-01-01', pharmacogenetics: '', lastUpdated: new Date().toISOString() } }
+            // Student data (Personal) would be excluded in real logic
         ];
     }
 
     try {
+        // 1. Fetch all users first to determine who is "Pro"
+        const users = await getAllUsers(requestingUid);
+        const userMap = new Map(users.map(u => [u.uid, u]));
+        
+        // Create a set of IDs that are strictly Professional or Admin
+        const validProUserIds = new Set(
+            users
+            .filter(u => u.role === 'professional' || u.role === 'admin')
+            .map(u => u.uid)
+        );
+
+        // 2. Fetch all patients
         // Note: This requires specific Firestore Security Rules allowing admins to read group collections.
         // match /{path=**}/patients/{patientId} { allow read: if isAdmin(); }
         const patientsQuery = query(collectionGroup(db, 'patients'));
@@ -248,26 +259,23 @@ export const getGlobalPatientData = async (requestingUid: string): Promise<{user
         
         const results: {user: string, patient: PatientProfile}[] = [];
         
-        // We need to fetch user details to map parent ID to a name/institution if possible,
-        // or just use the parent ID (User UID). Fetching all user profiles first is more efficient.
-        const users = await getAllUsers(requestingUid);
-        const userMap = new Map(users.map(u => [u.uid, u]));
-
         querySnapshot.forEach((doc) => {
             const patientData = doc.data() as PatientProfile;
             const parentUserRef = doc.ref.parent.parent; // users/{uid}/patients/{pid} -> users/{uid}
-            const parentUid = parentUserRef?.id || 'unknown';
+            const parentUid = parentUserRef?.id;
             
-            const userInfo = userMap.get(parentUid);
-            // Construct a display string for the owner: "Name (Institution)" or just UID
-            const ownerDisplay = userInfo 
-                ? `${userInfo.displayName || 'Unknown'} ${userInfo.institution ? `(${userInfo.institution})` : ''}` 
-                : parentUid;
+            // 3. LOGICAL SEPARATION: Only include if the parent user is a Pro/Admin
+            if (parentUid && validProUserIds.has(parentUid)) {
+                const userInfo = userMap.get(parentUid);
+                const ownerDisplay = userInfo 
+                    ? `${userInfo.displayName || 'Unknown'} ${userInfo.institution ? `(${userInfo.institution})` : ''}` 
+                    : parentUid;
 
-            results.push({
-                user: ownerDisplay,
-                patient: patientData
-            });
+                results.push({
+                    user: ownerDisplay,
+                    patient: patientData
+                });
+            }
         });
 
         return results;
