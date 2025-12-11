@@ -243,7 +243,9 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       config: {
         systemInstruction: systemInstruction, // Move role here for better adherence
         tools: [{ googleSearch: {} }],
-        // Expanded Safety Settings including SELF_HARM which is critical for "extreme cases" (overdose risk)
+        // Robust safety settings for medical content.
+        // We use BLOCK_NONE for HARM_CATEGORY_DANGEROUS_CONTENT to allow medical analysis of toxicity/overdose risks.
+        // REMOVED: HARM_CATEGORY_SELF_HARM is not a valid configurable category key for this model version.
         safetySettings: [
             {
                 category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
@@ -263,10 +265,6 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
             },
             {
                 category: 'HARM_CATEGORY_CIVIC_INTEGRITY',
-                threshold: 'BLOCK_NONE',
-            },
-            {
-                category: 'HARM_CATEGORY_SELF_HARM', // CRITICAL ADDITION
                 threshold: 'BLOCK_NONE',
             },
         ],
@@ -403,7 +401,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
       config: {
         safetySettings: [
             { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
-            { category: 'HARM_CATEGORY_SELF_HARM', threshold: 'BLOCK_NONE' }
+            // Removed SELF_HARM here as well to maintain compatibility
         ]
       }
     });
