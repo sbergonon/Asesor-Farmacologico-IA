@@ -99,7 +99,7 @@ const RiskBadge: React.FC<{ riskLevel: string }> = ({ riskLevel }) => {
   const { Icon, badgeClasses } = getRiskDetails(riskLevel);
 
   return (
-    <span className={`flex-shrink-0 inline-flex items-center gap-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-full ${badgeClasses}`}>
+    <span className={`risk-badge flex-shrink-0 inline-flex items-center gap-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-full ${badgeClasses}`}>
       <Icon className="h-4 w-4" />
       {riskLevel}
     </span>
@@ -319,94 +319,75 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
       setActiveFilter(null);
 
       // Give React more time to re-render the expanded sections
-      await new Promise(resolve => setTimeout(resolve, 300));
+      await new Promise(resolve => setTimeout(resolve, 500));
 
       const canvas = await html2canvas(elementToCapture, {
-        scale: 2, // High resolution for small text clarity
+        scale: 2, // High resolution for text clarity
         logging: false,
         useCORS: true,
         backgroundColor: '#ffffff', // Force white background
         onclone: (clonedDoc) => {
             const report = clonedDoc.getElementById('analysis-report');
             if (report) {
-                // --- COMPACT MODE FOR PDF ---
+                // --- OPTIMIZED A4 PRINT STYLES ---
                 
-                // 1. Force a fixed width optimized for A4 (avoids mobile stretching)
-                report.style.width = '800px'; 
-                report.style.margin = '0 auto';
-                
-                // 2. Reduce base font size for printing
-                report.style.fontSize = '11px'; 
-                report.style.color = '#000000';
-                report.style.fontFamily = 'sans-serif';
-                report.style.boxShadow = 'none';
-                report.style.border = 'none';
-                report.style.padding = '20px';
+                // Add a style block to override existing Tailwind classes more reliably
+                const style = clonedDoc.createElement('style');
+                style.innerHTML = `
+                    #analysis-report {
+                        width: 760px !important; /* Fixed width optimized for A4 */
+                        padding: 20px !important;
+                        background: white !important;
+                        color: #1e293b !important;
+                        font-family: 'Inter', sans-serif !important;
+                    }
+                    * {
+                        color: #1e293b !important; /* Force dark text for readability */
+                    }
+                    /* Compact Typography */
+                    h2 { font-size: 18px !important; margin-bottom: 8px !important; color: #2563eb !important; }
+                    h3 { font-size: 14px !important; margin-bottom: 4px !important; font-weight: 700 !important; }
+                    h4 { font-size: 11px !important; margin-bottom: 2px !important; font-weight: 700 !important; }
+                    h5 { font-size: 9px !important; margin-bottom: 0px !important; text-transform: uppercase; color: #64748b !important; letter-spacing: 0.05em !important; margin-top: 4px !important; }
+                    p, li, span, div { font-size: 9px !important; line-height: 1.25 !important; }
+                    
+                    /* Compact Spacing */
+                    .space-y-6 > * + * { margin-top: 10px !important; } 
+                    .space-y-4 > * + * { margin-top: 6px !important; }
+                    .space-y-3 > * + * { margin-top: 4px !important; }
+                    .p-4 { padding: 6px 10px !important; }
+                    .mb-3 { margin-bottom: 4px !important; }
+                    .pt-3 { padding-top: 4px !important; }
+                    
+                    /* Hide UI elements */
+                    button { display: none !important; }
+                    .summary-filters { display: none !important; } /* Hide filter chips */
+                    
+                    /* Adjust Visuals */
+                    .risk-badge { transform: scale(0.9); }
+                    svg { width: 10px !important; height: 10px !important; }
+                    .border-t { border-top-width: 1px !important; border-color: #e2e8f0 !important; }
+                    
+                    /* Prose (Summary Text) */
+                    .prose { font-size: 9px !important; max-width: 100% !important; }
+                    .prose p { margin-bottom: 4px !important; }
+                    .prose ul { margin-top: 0 !important; margin-bottom: 4px !important; }
+                    .prose li { margin-top: 0 !important; margin-bottom: 0 !important; }
+                `;
+                clonedDoc.head.appendChild(style);
 
-                // 3. Compact Title
+                // Manual cleanups if needed
                 const h2 = report.querySelector('h2');
                 if (h2) {
-                    h2.style.fontSize = '20px';
-                    h2.style.marginBottom = '10px';
-                    // Fix gradient text issue in html2canvas
-                    h2.style.color = '#2563eb';
                     h2.style.backgroundImage = 'none';
                     h2.style.webkitBackgroundClip = 'initial';
                     h2.style.backgroundClip = 'initial';
-                }
-
-                // 4. Compact Section Headers and Cards
-                // Remove large vertical spacing
-                const spacingElements = report.querySelectorAll('.space-y-6');
-                spacingElements.forEach((el: any) => {
-                    el.classList.remove('space-y-6');
-                    el.classList.add('space-y-3');
-                });
-
-                // Reduce padding inside cards
-                const paddedElements = report.querySelectorAll('.p-4');
-                paddedElements.forEach((el: any) => {
-                    el.style.padding = '8px 12px'; // Compact padding
-                    el.style.marginBottom = '8px';
-                });
-
-                // Reduce font sizes of headings within sections
-                const subHeaders = report.querySelectorAll('h3, h4');
-                subHeaders.forEach((el: any) => {
-                    el.style.fontSize = '14px';
-                    el.style.marginBottom = '4px';
-                });
-
-                const fieldLabels = report.querySelectorAll('h5');
-                fieldLabels.forEach((el: any) => {
-                    el.style.fontSize = '11px';
-                    el.style.marginBottom = '1px';
-                    el.style.marginTop = '6px';
-                });
-
-                // Compact paragraph text
-                const paragraphs = report.querySelectorAll('p, li');
-                paragraphs.forEach((el: any) => {
-                    el.style.fontSize = '10px';
-                    el.style.lineHeight = '1.3';
-                });
-
-                // Hide buttons that are not relevant for PDF (Copy icons, etc.)
-                const buttons = report.querySelectorAll('button');
-                buttons.forEach((btn: any) => btn.style.display = 'none');
-                
-                // Hide risk summary panel filters (visual clutter in print)
-                const summaryPanel = report.querySelector('div.flex-wrap.gap-3');
-                if (summaryPanel && summaryPanel.parentElement) {
-                    summaryPanel.parentElement.style.border = '1px solid #eee';
-                    summaryPanel.parentElement.style.padding = '10px';
                 }
             }
         }
       });
 
-      // Use JPEG with 0.75 quality compression instead of PNG
-      const imgData = canvas.toDataURL('image/jpeg', 0.75);
+      const imgData = canvas.toDataURL('image/jpeg', 0.85); // High quality JPEG
       
       const pdf = new jsPDF({
         orientation: 'p',
@@ -416,6 +397,8 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
+      
+      // Calculate dimensions to fit width perfectly
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
       const ratio = canvasWidth / pdfWidth;
@@ -424,13 +407,13 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
       let heightLeft = imgHeight;
       let position = 0;
 
-      // Add the first page
+      // First page
       pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
       heightLeft -= pdfHeight;
 
-      // Add new pages if content is taller than one page
+      // Subsequent pages
       while (heightLeft > 0) {
-        position -= pdfHeight; // Move the image up
+        position -= pdfHeight; // Move image up
         pdf.addPage();
         pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
         heightLeft -= pdfHeight;
@@ -561,12 +544,14 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
         <div ref={resultRef} id="analysis-report" className="p-4 md:p-6 bg-white dark:bg-slate-800/50 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 space-y-6">
             <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-teal-400">{t.results_title}</h2>
 
-            <SummaryPanel
-              counts={summaryCounts}
-              activeFilter={activeFilter}
-              onFilterChange={setActiveFilter}
-              t={t}
-            />
+            <div className="summary-filters">
+                <SummaryPanel
+                counts={summaryCounts}
+                activeFilter={activeFilter}
+                onFilterChange={setActiveFilter}
+                t={t}
+                />
+            </div>
 
             {highRiskItems.length > 0 && !activeFilter && (
               <div className="p-4 bg-red-100 dark:bg-red-900/50 border-l-4 border-red-500 text-red-800 dark:text-red-200 rounded-r-lg" role="alert">
