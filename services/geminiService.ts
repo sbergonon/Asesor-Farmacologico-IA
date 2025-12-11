@@ -12,7 +12,8 @@ import type {
     BeersCriteriaAlert,
     Medication,
     SupplementInteraction,
-    SystemSettings
+    SystemSettings,
+    InvestigatorResult
 } from '../types';
 import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
@@ -233,39 +234,20 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     // SANITIZED SYSTEM INSTRUCTION:
-    // Removed any mentions of "self-harm", "drug abuse", or negations of bad behavior.
-    // Framed strictly as a clinical database to bypass context-based safety triggers.
     const systemInstruction = `You are a Clinical Pharmacology Database and Decision Support Engine. Your function is to process the input list of pharmaceutical compounds and clinical conditions to output a raw, objective, technical report on drug interactions, pharmacokinetics, and contraindications based on established medical guidelines (FDA, EMA). Use strict medical terminology.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", // UPGRADE: Pro model handles medical context better with less false-positive safety blocking.
+      model: "gemini-3-pro-preview", 
       contents: prompt,
       config: {
         systemInstruction: systemInstruction,
         tools: [{ googleSearch: {} }],
-        // Standard BLOCK_NONE on valid categories. 
-        // We rely on the model upgrade and sanitized prompt to handle the rest.
         safetySettings: [
-            {
-                category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
-                threshold: 'BLOCK_NONE', 
-            },
-            {
-                category: 'HARM_CATEGORY_HATE_SPEECH',
-                threshold: 'BLOCK_NONE',
-            },
-            {
-                category: 'HARM_CATEGORY_HARASSMENT',
-                threshold: 'BLOCK_NONE',
-            },
-            {
-                category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
-                threshold: 'BLOCK_NONE',
-            },
-            {
-                category: 'HARM_CATEGORY_CIVIC_INTEGRITY',
-                threshold: 'BLOCK_NONE',
-            },
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_CIVIC_INTEGRITY', threshold: 'BLOCK_NONE' },
         ],
       },
     });
@@ -376,6 +358,94 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     
     throw new Error(t.error_service_unavailable);
   }
+};
+
+export const investigateSymptoms = async (
+    symptoms: string, 
+    medications: Medication[], 
+    conditions: string, 
+    dateOfBirth: string, 
+    pharmacogenetics: string, 
+    lang: 'es' | 'en'
+): Promise<InvestigatorResult> => {
+    const t = translations[lang];
+    const apiKey = getApiKey();
+    if (!apiKey) throw new ApiKeyError(t.error_api_key_invalid);
+
+    const medStr = medications.map(m => `${m.name} (${m.dosage})`).join(', ');
+    const prompt = `
+        You are a Clinical Investigator AI. Your task is "Reverse Pharmacology": determine if the observed symptoms can be explained by the patient's current regimen, conditions, or genetics.
+
+        **Patient Context:**
+        - Observed Symptoms/Signs: "${symptoms}"
+        - Medications: ${medStr}
+        - Conditions: ${conditions}
+        - Age/DOB: ${dateOfBirth}
+        - Pharmacogenetics: ${pharmacogenetics}
+
+        **Instructions:**
+        1. Analyze if the symptom is a known side effect of any medication.
+        2. Analyze if the symptom is a result of a drug-drug or drug-condition interaction.
+        3. Consider cumulative effects (e.g. anticholinergic burden, QT prolongation).
+        4. Consider pharmacogenetic implications if data is present.
+
+        **Output Format:**
+        Provide a JSON block first, then a Markdown explanation.
+
+        [INVESTIGATOR_START]
+        {
+            "matches": [
+                {
+                    "cause": "Specific Drug or Interaction Name",
+                    "probability": "High/Medium/Low",
+                    "mechanism": "Brief explanation of mechanism (e.g. CYP inhibition, additive toxicity)"
+                }
+            ]
+        }
+        [INVESTIGATOR_END]
+
+        ### Clinical Analysis
+        (Provide a detailed, professional markdown explanation here, citing specific mechanisms and likelihoods).
+        
+        ### Sources
+        (List relevant medical sources if found via grounding).
+    `;
+
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+        model: "gemini-3-pro-preview", // Use Pro for complex reasoning
+        contents: prompt,
+        config: {
+            tools: [{ googleSearch: {} }],
+            safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }]
+        }
+    });
+
+    const fullText = response.text || "";
+    let matches = [];
+    let analysisText = fullText;
+
+    const jsonStart = fullText.indexOf('[INVESTIGATOR_START]');
+    const jsonEnd = fullText.indexOf('[INVESTIGATOR_END]');
+
+    if (jsonStart !== -1 && jsonEnd !== -1) {
+        try {
+            const jsonStr = fullText.substring(jsonStart + '[INVESTIGATOR_START]'.length, jsonEnd).trim();
+            const parsed = JSON.parse(jsonStr);
+            matches = parsed.matches || [];
+            analysisText = fullText.substring(jsonEnd + '[INVESTIGATOR_END]'.length).trim();
+        } catch(e) { console.error("Investigator JSON Parse Error", e); }
+    }
+
+    const groundingChunks: GroundingChunk[] = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources = groundingChunks
+        .filter(chunk => chunk.web && chunk.web.uri && chunk.web.title)
+        .map(chunk => ({
+            uri: chunk.web!.uri!,
+            title: chunk.web!.title!,
+        }));
+
+    return { analysisText, sources, matches };
 };
 
 export const analyzeSupplementInteractions = async (supplementName: string, medications: Medication[], lang: 'es' | 'en'): Promise<SupplementInteraction[]> => {

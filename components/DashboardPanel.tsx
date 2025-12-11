@@ -88,6 +88,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
     const riskLevelCounts: Record<string, number> = {};
     const medicationFrequency: Record<string, number> = {};
     const interactionTypeCounts: Record<string, number> = {};
+    const specificInteractionCounts: Record<string, number> = {};
     
     const highRiskTerms = ['alto', 'high', 'crítico', 'critical'];
 
@@ -108,8 +109,27 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
             const risk = finding.riskLevel || 'Unknown';
             riskLevelCounts[risk] = (riskLevelCounts[risk] || 0) + 1;
             
+            // Interaction type count
+            if ('interaction' in finding) interactionTypeCounts[t.interaction_drug_drug] = (interactionTypeCounts[t.interaction_drug_drug] || 0) + 1;
+            else if ('substance' in finding) interactionTypeCounts[t.interaction_drug_substance] = (interactionTypeCounts[t.interaction_drug_substance] || 0) + 1;
+            else if ('allergen' in finding) interactionTypeCounts[t.alert_allergy] = (interactionTypeCounts[t.alert_allergy] || 0) + 1;
+            else if ('condition' in finding) interactionTypeCounts[t.contraindication_condition] = (interactionTypeCounts[t.contraindication_condition] || 0) + 1;
+            else if ('geneticFactor' in finding) interactionTypeCounts[t.contraindication_pharmacogenetic] = (interactionTypeCounts[t.contraindication_pharmacogenetic] || 0) + 1;
+            else if ('criteria' in finding) interactionTypeCounts[t.alert_beers_criteria] = (interactionTypeCounts[t.alert_beers_criteria] || 0) + 1;
+
+            // Specific Critical/High interaction tracking
             if (highRiskTerms.some(term => risk.toLowerCase().includes(term))) {
                 highRiskFindings++;
+                
+                let interactionName = '';
+                if ('interaction' in finding) interactionName = finding.interaction; // DDI
+                else if ('substance' in finding) interactionName = `${finding.medication} + ${finding.substance}`; // DSI
+                else if ('allergen' in finding) interactionName = `${finding.medication} (Allergy: ${finding.allergen})`; // Allergy
+                else if ('condition' in finding) interactionName = `${finding.medication} + ${finding.condition}`; // Condition
+                
+                if (interactionName) {
+                    specificInteractionCounts[interactionName] = (specificInteractionCounts[interactionName] || 0) + 1;
+                }
             }
             
             // Medication frequency count
@@ -123,15 +143,6 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
                     medicationFrequency[cleanMed] = (medicationFrequency[cleanMed] || 0) + 1;
                 });
             }
-            
-            // Interaction type count
-            if ('interaction' in finding) interactionTypeCounts[t.interaction_drug_drug] = (interactionTypeCounts[t.interaction_drug_drug] || 0) + 1;
-            else if ('substance' in finding) interactionTypeCounts[t.interaction_drug_substance] = (interactionTypeCounts[t.interaction_drug_substance] || 0) + 1;
-            else if ('allergen' in finding) interactionTypeCounts[t.alert_allergy] = (interactionTypeCounts[t.alert_allergy] || 0) + 1;
-            else if ('condition' in finding) interactionTypeCounts[t.contraindication_condition] = (interactionTypeCounts[t.contraindication_condition] || 0) + 1;
-            else if ('geneticFactor' in finding) interactionTypeCounts[t.contraindication_pharmacogenetic] = (interactionTypeCounts[t.contraindication_pharmacogenetic] || 0) + 1;
-            else if ('criteria' in finding) interactionTypeCounts[t.alert_beers_criteria] = (interactionTypeCounts[t.alert_beers_criteria] || 0) + 1;
-
         });
     });
 
@@ -142,6 +153,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
         riskDistribution: Object.entries(riskLevelCounts).map(([label, value]) => ({ label, value })),
         topMedications: Object.entries(medicationFrequency).sort(([, a], [, b]) => b - a).slice(0, 5).map(([label, value]) => ({ label, value })),
         topInteractionTypes: Object.entries(interactionTypeCounts).sort(([, a], [, b]) => b - a).map(([label, value]) => ({ label, value })),
+        topSpecificInteractions: Object.entries(specificInteractionCounts).sort(([, a], [, b]) => b - a).slice(0, 8).map(([label, value]) => ({ label, value })),
     };
   }, [history, t]);
 
@@ -210,12 +222,20 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
     setIsExportingPdf(true);
     try {
         const canvas = await html2canvas(dashboardRef.current, {
-            scale: 1.5,
+            scale: 2, // Higher quality for text
             logging: false,
             useCORS: true,
-            backgroundColor: window.getComputedStyle(document.body).backgroundColor,
+            backgroundColor: '#ffffff', // Force white background
+            onclone: (clonedDoc) => {
+                // Force fixed width for A4 consistency
+                const element = clonedDoc.getElementById('dashboard-content');
+                if (element) {
+                    element.style.width = '750px'; 
+                    element.style.padding = '20px';
+                }
+            }
         });
-        const imgData = canvas.toDataURL('image/jpeg', 0.7); // Compressed JPEG
+        const imgData = canvas.toDataURL('image/jpeg', 0.85); 
         const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const pdfWidth = pdf.internal.pageSize.getWidth();
         const canvasWidth = canvas.width;
@@ -246,6 +266,8 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
           analysisStats.topMedications.forEach(row => csvContent += `${row.label},${row.value}\n`);
           csvContent += "\nFinding Types\nType,Count\n";
           analysisStats.topInteractionTypes.forEach(row => csvContent += `${row.label},${row.value}\n`);
+          csvContent += "\nSpecific High Risk Interactions\nInteraction,Count\n";
+          analysisStats.topSpecificInteractions.forEach(row => csvContent += `"${row.label}",${row.value}\n`);
       } else if (subTab === 'patients' && patientStats) {
           csvContent += "Metric,Value\n";
           csvContent += `${t.dashboard_unique_patients},${patientStats.totalUniquePatients}\n`;
@@ -317,7 +339,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
           </div>
       </div>
 
-      <div ref={dashboardRef} className="space-y-6 bg-white/50 dark:bg-slate-900/50 p-2 rounded-xl">
+      <div id="dashboard-content" ref={dashboardRef} className="space-y-6 bg-white/50 dark:bg-slate-900/50 p-4 rounded-xl">
         {/* Analysis View */}
         {subTab === 'analysis' && analysisStats && (
             <>
@@ -334,6 +356,34 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
                         <BarChart data={analysisStats.topInteractionTypes} title={t.dashboard_finding_types} t={t} />
                     </div>
                 </div>
+
+                {/* NEW: Specific Critical Interactions Table */}
+                {analysisStats.topSpecificInteractions.length > 0 && (
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
+                        <h3 className="text-md font-semibold text-red-800 dark:text-red-200 mb-4 flex items-center">
+                            <AlertTriangleIcon className="h-5 w-5 mr-2" />
+                            {t.dashboard_critical_interactions_title}
+                        </h3>
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-red-50 dark:bg-red-900/20">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left text-red-900 dark:text-red-100">{t.results_interaction} / {t.results_contraindication}</th>
+                                        <th className="px-4 py-2 text-right text-red-900 dark:text-red-100">Frecuencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-red-100 dark:divide-slate-700">
+                                    {analysisStats.topSpecificInteractions.map((item, idx) => (
+                                        <tr key={idx}>
+                                            <td className="px-4 py-2 text-slate-800 dark:text-slate-200">{item.label}</td>
+                                            <td className="px-4 py-2 text-right font-bold text-slate-800 dark:text-slate-200">{item.value}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </>
         )}
 

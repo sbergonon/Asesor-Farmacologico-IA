@@ -43,6 +43,7 @@ const getPermissions = (role: UserRole | null): UserPermissions => {
     canExportData: isPro,
     canManagePatients: isPro, // Restricted to Pro/Admin
     canConfigureSystem: isAdmin, // Superuser only
+    canAccessInvestigator: isPro, // Pro only
   };
 };
 

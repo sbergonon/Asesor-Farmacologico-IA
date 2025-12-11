@@ -31,10 +31,11 @@ import ProBadge from './components/ProBadge';
 import RestrictedFeatureWrapper from './components/RestrictedFeatureWrapper';
 import AdminPanel from './components/AdminPanel';
 import DocumentTextIcon from './components/icons/DocumentTextIcon';
+import InvestigatorPanel from './components/InvestigatorPanel';
 
 
 type AnalysisMode = 'individual' | 'batch';
-type ActiveTab = 'form' | 'patients' | 'history' | 'dashboard' | 'admin';
+type ActiveTab = 'form' | 'patients' | 'history' | 'dashboard' | 'admin' | 'investigator';
 
 const App: React.FC = () => {
   const { user, permissions, loading: authLoading } = useAuth();
@@ -88,18 +89,11 @@ const App: React.FC = () => {
 
   // Access Control Guard
   useEffect(() => {
-    if (activeTab === 'dashboard' && !permissions.canAccessDashboard) {
-        setActiveTab('form');
-    }
-    if (activeTab === 'patients' && !permissions.canManagePatients) {
-        setActiveTab('form');
-    }
-    if (activeTab === 'admin' && !permissions.canConfigureSystem) {
-        setActiveTab('form');
-    }
-    if (analysisMode === 'batch' && !permissions.canAccessBatchAnalysis) {
-        setAnalysisMode('individual');
-    }
+    if (activeTab === 'dashboard' && !permissions.canAccessDashboard) setActiveTab('form');
+    if (activeTab === 'patients' && !permissions.canManagePatients) setActiveTab('form');
+    if (activeTab === 'admin' && !permissions.canConfigureSystem) setActiveTab('form');
+    if (activeTab === 'investigator' && !permissions.canAccessInvestigator) setActiveTab('form');
+    if (analysisMode === 'batch' && !permissions.canAccessBatchAnalysis) setAnalysisMode('individual');
   }, [activeTab, analysisMode, permissions]);
 
   // Load Data from Firestore when user logs in
@@ -488,6 +482,17 @@ const App: React.FC = () => {
                  />
             )}
             
+            {!isDataLoading && activeTab === 'investigator' && permissions.canAccessInvestigator && (
+                <InvestigatorPanel
+                    medications={medications}
+                    conditions={conditions}
+                    dateOfBirth={dateOfBirth}
+                    pharmacogenetics={pharmacogenetics}
+                    t={t}
+                    lang={lang}
+                />
+            )}
+
             {!isDataLoading && activeTab === 'history' && (
                 <HistoryPanel
                     history={history}

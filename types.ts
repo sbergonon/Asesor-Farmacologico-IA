@@ -1,5 +1,4 @@
 
-
 export interface GroundingChunk {
   web?: {
     uri?: string;
@@ -116,6 +115,16 @@ export interface AnalysisResult {
   beersCriteriaAlerts: BeersCriteriaAlert[];
 }
 
+export interface InvestigatorResult {
+  analysisText: string;
+  sources: Source[];
+  matches: {
+    cause: string; // e.g. "Interaction: Drug A + Drug B" or "Side Effect: Drug A"
+    probability: string; // High/Medium/Low
+    mechanism: string;
+  }[];
+}
+
 export interface HistoryItem {
   id: string;
   timestamp: string;
@@ -178,6 +187,7 @@ export interface UserPermissions {
   canExportData: boolean;
   canManagePatients: boolean;
   canConfigureSystem: boolean; // For Superuser/Admin
+  canAccessInvestigator: boolean; // New permission
 }
 
 export interface UserProfile {

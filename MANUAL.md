@@ -18,7 +18,7 @@ Bienvenido al manual oficial de la aplicación. Este documento cubre desde las f
 
 ### Roles de Usuario
 *   **Personal:** Acceso básico. Puede realizar análisis individuales, guardar su propio historial y ver resultados.
-*   **Profesional (Pro):** Acceso avanzado. Incluye gestión de pacientes, análisis por lotes (CSV), dashboard de estadísticas y exportación de datos.
+*   **Profesional (Pro):** Acceso avanzado. Incluye gestión de pacientes, análisis por lotes (CSV), investigador clínico, dashboard de estadísticas y exportación de datos.
 *   **Admin (Superuser):** Control total. Incluye todas las funciones Pro más la configuración global del sistema y fuentes de IA.
 
 ---
@@ -60,12 +60,20 @@ Ideal para revisar bases de datos de pacientes o estudios clínicos.
 4.  Suba el archivo. La IA procesará fila por fila.
 5.  Al finalizar, podrá exportar todos los reportes en un ZIP o un resumen en CSV.
 
+### Investigador Clínico
+Una herramienta de razonamiento inverso accesible desde la pestaña **Investigador**.
+1.  Cargue los datos de un paciente en "Nuevo Análisis" (o cargue un perfil).
+2.  Vaya a la pestaña **Investigador**.
+3.  Introduzca un síntoma clínico (ej. "Neutropenia", "Mareos recurrentes").
+4.  La IA analizará si dicho síntoma puede ser causado por la medicación actual, una interacción oculta o un factor genético.
+
 ### Dashboard de Farmacovigilancia
 *   Vaya a la pestaña **Dashboard**.
 *   Visualice estadísticas agregadas: fármacos más problemáticos en su consulta, tipos de interacciones más frecuentes y distribución de riesgos.
+*   **NUEVO:** Tabla de "Interacciones Críticas Frecuentes" para identificar rápidamente combinaciones peligrosas recurrentes en su población.
 
 ### Exportación de Datos
-*   Puede descargar cualquier análisis individual como **PDF** (informe) o **CSV** (datos estructurados).
+*   Puede descargar cualquier análisis individual como **PDF** (informe optimizado para A4) o **CSV** (datos estructurados).
 *   Desde la pestaña Historial, puede exportar toda su actividad a CSV.
 
 ---

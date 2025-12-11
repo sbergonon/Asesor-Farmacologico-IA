@@ -1,5 +1,4 @@
 
-
 import React, { useEffect } from 'react';
 import XIcon from './icons/XIcon';
 
@@ -54,7 +53,7 @@ const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
                     <h4 className="font-bold text-sm mb-1">Roles de Usuario:</h4>
                     <ul className="list-disc pl-5 text-sm space-y-1">
                         <li><strong>Personal:</strong> Acceso básico. Puede realizar análisis individuales.</li>
-                        <li><strong>Profesional (Pro):</strong> Acceso avanzado. Gestión de pacientes, lotes (CSV), dashboard y exportación.</li>
+                        <li><strong>Profesional (Pro):</strong> Acceso avanzado. Gestión de pacientes, lotes (CSV), investigador clínico, dashboard y exportación.</li>
                         <li><strong>Admin (Superuser):</strong> Control total. Funciones Pro + Configuración global del sistema.</li>
                     </ul>
                 </div>
@@ -90,10 +89,22 @@ const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
                         <p className="text-sm">En "Nuevo Análisis", cambie a <strong>"Por Lote"</strong>. Descargue la plantilla CSV, rellénela (separando meds con <code>;</code>) y súbala para analizar múltiples casos a la vez.</p>
                     </div>
                 </div>
-                <div className="mt-4">
-                    <h4 className="text-lg font-semibold">Dashboard y Exportación</h4>
-                    <p className="text-sm">Visualice estadísticas en la pestaña Dashboard. Exporte reportes individuales a PDF/CSV o el historial completo desde su pestaña correspondiente.</p>
-                </div>
+                
+                <h4 className="text-lg font-semibold mt-4">Investigador Clínico (Nuevo)</h4>
+                <p className="text-sm mb-2">
+                    La pestaña <strong>Investigador Clínico</strong> permite realizar un razonamiento inverso ("Reverse Pharmacology"). 
+                </p>
+                <ul className="list-disc pl-5 text-sm space-y-1 mb-2">
+                    <li>Utiliza los datos cargados en la pestaña "Nuevo Análisis" (medicamentos, edad, genética).</li>
+                    <li>Introduzca un síntoma observado (ej: "Mareos", "Prolongación QT").</li>
+                    <li>La IA determinará si el síntoma puede explicarse por efectos adversos, interacciones o factores genéticos del paciente actual.</li>
+                </ul>
+
+                <h4 className="text-lg font-semibold mt-4">Dashboard y Exportación</h4>
+                <p className="text-sm">
+                    Visualice estadísticas en la pestaña Dashboard. Ahora incluye una tabla específica de <strong>Interacciones Críticas Frecuentes</strong>.
+                    Exporte reportes individuales a PDF/CSV o el historial completo desde su pestaña correspondiente.
+                </p>
             </section>
 
             <hr className="border-slate-200 dark:border-slate-700" />
