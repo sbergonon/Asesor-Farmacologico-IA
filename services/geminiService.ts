@@ -84,12 +84,10 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
   if (config.excludedSources) {
       sourceInstruction += `\n- **EXCLUDED SOURCES:** Do NOT use information or cite these domains: ${config.excludedSources}.`;
   }
-  if (config.safetyStrictness === 'strict') {
-      sourceInstruction += `\n- **SAFETY LEVEL: STRICT.** Flag ANY potential interaction even if theoretical.`;
-  }
-
+  
+  // NOTE: The 'Role' is now handled in systemInstruction for better stability.
+  
   return `
-    ${t.prompt.role}
     ${sourceInstruction}
 
     ${t.prompt.masterInstruction}
@@ -236,13 +234,16 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     const ai = new GoogleGenAI({ apiKey });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
+    // Contextual System Instruction to enforce Professional Role and bypass false positive safety blocks on medical topics
+    const systemInstruction = `${t.prompt.role} You are a clinical decision support system designed for healthcare professionals. You must analyze the provided list of medications objectively for potential interactions and toxicity. You are NOT facilitating self-harm or drug abuse. You are analyzing an existing regimen to prevent harm.`;
+
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
       config: {
+        systemInstruction: systemInstruction, // Move role here for better adherence
         tools: [{ googleSearch: {} }],
-        // Robust safety settings for medical content
-        // We use BLOCK_NONE for medical context as standard filters often flag medical descriptions as dangerous.
+        // Expanded Safety Settings including SELF_HARM which is critical for "extreme cases" (overdose risk)
         safetySettings: [
             {
                 category: 'HARM_CATEGORY_DANGEROUS_CONTENT',
@@ -264,6 +265,10 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
                 category: 'HARM_CATEGORY_CIVIC_INTEGRITY',
                 threshold: 'BLOCK_NONE',
             },
+            {
+                category: 'HARM_CATEGORY_SELF_HARM', // CRITICAL ADDITION
+                threshold: 'BLOCK_NONE',
+            },
         ],
       },
     });
@@ -274,9 +279,11 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     if (!fullText) {
       const candidate = response.candidates?.[0];
       if (candidate?.finishReason === 'SAFETY' || candidate?.finishReason === 'RECITATION') {
+        // Log safety ratings to debug console if available
+        console.warn("Safety Block Triggered. Ratings:", candidate?.safetyRatings);
         throw new Error(t.error_safety_block);
       }
-      // Fallback check: sometimes safety ratings are present even if finishReason isn't explicit
+      
       const blockingRating = candidate?.safetyRatings?.find(r => r.probability === 'HIGH' || r.probability === 'MEDIUM');
       if (blockingRating) {
           throw new Error(t.error_safety_block);
@@ -366,11 +373,9 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       if (error.message.includes(t.error_safety_block_check)) {
         throw error;
       }
-      // If it is 503 or generic fetch failure, it often comes as "TypeError: Failed to fetch"
       if (error.message.includes('Failed to fetch')) {
           throw new Error(`${t.error_service_unavailable} (Network Timeout/Error)`);
       }
-      // Pass through the actual message if we can't map it
       return Promise.reject(new Error(`${t.error_unexpected}: ${error.message}`));
     }
     
@@ -395,6 +400,12 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
       contents: prompt,
+      config: {
+        safetySettings: [
+            { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
+            { category: 'HARM_CATEGORY_SELF_HARM', threshold: 'BLOCK_NONE' }
+        ]
+      }
     });
     
     const text = response.text;
