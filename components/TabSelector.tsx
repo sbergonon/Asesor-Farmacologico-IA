@@ -66,9 +66,12 @@ const TabSelector: React.FC<TabSelectorProps> = ({ activeTab, setActiveTab, t })
 
   const visibleTabs = tabs.filter(tab => tab.isVisible);
 
-  // Compacted styles: Reduced padding (px-3 py-2) and adjusted font sizes for better fit
+  // Compacted styles: 
+  // On Mobile (default): Flex column or simple block.
+  // On Tablet (sm): Flex row with scroll.
+  // On Desktop (lg): Grid layout (auto-cols-fr) to force equal distribution and NO SCROLL.
   const getButtonClass = (tabId: TabId) => {
-    const baseClass = "w-full sm:w-auto flex-1 sm:flex-none inline-flex items-center justify-center px-3 py-2 font-medium text-xs sm:text-sm rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-blue-500";
+    const baseClass = "w-full inline-flex items-center justify-center px-2 py-2 font-medium text-xs sm:text-sm rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-900 focus:ring-blue-500 truncate";
     if (activeTab === tabId) {
       return `${baseClass} bg-white dark:bg-slate-800 shadow text-blue-600 dark:text-blue-400`;
     }
@@ -76,15 +79,16 @@ const TabSelector: React.FC<TabSelectorProps> = ({ activeTab, setActiveTab, t })
   };
 
   return (
-    <div className="p-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-1 overflow-x-auto scrollbar-hide">
+    <div className="p-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl flex flex-col sm:flex-row lg:grid lg:grid-flow-col lg:auto-cols-fr gap-1 overflow-x-auto lg:overflow-visible scrollbar-hide">
       {visibleTabs.map(tab => (
         <button
           key={tab.id}
           onClick={() => setActiveTab(tab.id as TabId)}
           className={getButtonClass(tab.id as TabId)}
+          title={tab.name} // Tooltip for very small screens if truncated
         >
           <tab.icon className="h-4 w-4 sm:h-5 sm:w-5 mr-1.5 flex-shrink-0" />
-          <span className="whitespace-nowrap">{tab.name}</span>
+          <span className="truncate">{tab.name}</span>
           {tab.isPro && <ProBadge />}
         </button>
       ))}

@@ -373,7 +373,47 @@ export const investigateSymptoms = async (
     if (!apiKey) throw new ApiKeyError(t.error_api_key_invalid);
 
     const medStr = medications.map(m => `${m.name} (${m.dosage})`).join(', ');
-    const prompt = `
+    
+    // Choose prompt language based on user preference
+    const prompt = lang === 'es' 
+    ? `
+        Eres una IA de Investigación Clínica. Tu tarea es "Farmacología Inversa": determinar si los síntomas observados pueden explicarse por el régimen actual del paciente, condiciones o genética.
+
+        **Contexto del Paciente:**
+        - Síntomas/Signos Observados: "${symptoms}"
+        - Medicamentos: ${medStr}
+        - Condiciones: ${conditions}
+        - Edad/Fecha de Nacimiento: ${dateOfBirth}
+        - Farmacogenética: ${pharmacogenetics}
+
+        **Instrucciones:**
+        1. Analiza si el síntoma es un efecto secundario conocido de algún medicamento.
+        2. Analiza si el síntoma es resultado de una interacción fármaco-fármaco o fármaco-condición.
+        3. Considera efectos acumulativos (ej: carga anticolinérgica, prolongación QT).
+        4. Considera implicaciones farmacogenéticas si hay datos presentes.
+
+        **Formato de Salida:**
+        Proporciona primero un bloque JSON, luego una explicación en Markdown. El contenido debe estar estrictamente en ESPAÑOL.
+
+        [INVESTIGATOR_START]
+        {
+            "matches": [
+                {
+                    "cause": "Nombre Específico del Fármaco o Interacción",
+                    "probability": "Alta/Media/Baja",
+                    "mechanism": "Breve explicación del mecanismo (ej: inhibición CYP, toxicidad aditiva)"
+                }
+            ]
+        }
+        [INVESTIGATOR_END]
+
+        ### Análisis Clínico
+        (Proporciona una explicación detallada y profesional en formato Markdown en ESPAÑOL, citando mecanismos específicos y probabilidades).
+        
+        ### Fuentes
+        (Lista fuentes médicas relevantes si se encuentran mediante grounding).
+    ` 
+    : `
         You are a Clinical Investigator AI. Your task is "Reverse Pharmacology": determine if the observed symptoms can be explained by the patient's current regimen, conditions, or genetics.
 
         **Patient Context:**
