@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import Fuse from 'fuse.js';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
 import { supplementDatabase, type SupplementInfo } from '../data/supplements';
 import { pgxGeneGroups } from '../data/pgxGenes';
@@ -63,9 +64,45 @@ function useDebounce<T>(value: T, delay: number): T {
 interface DisplaySuggestion extends DrugInfo {
   subtitle?: string;
   source: 'local' | 'api';
-  similarity?: number; // Added for internal sorting
+  matchScore?: number; // Used for final sorting (higher is better)
 }
 
+// Helper to calculate a unified relevance score
+const calculateRelevance = (item: DrugInfo, query: string, source: 'local' | 'api', fuseScore?: number): number => {
+    let score = 0;
+    const name = item.name.toLowerCase();
+    const q = query.toLowerCase();
+
+    // 1. Fuzzy Score (Base)
+    if (fuseScore !== undefined) {
+        // Fuse score is 0 (perfect) to 1 (bad). Invert it.
+        score += (1 - fuseScore) * 100;
+    } else {
+        // Fallback for API results without Fuse score
+        if (name === q) score += 100;
+        else if (name.startsWith(q)) score += 80;
+        else if (name.includes(q)) score += 60;
+        else score += 40;
+    }
+
+    // 2. Source Priority
+    // We trust our local database curations slightly more for formatting
+    if (source === 'local') score += 15;
+
+    // 3. Exact Match Bonus (Huge boost)
+    if (name === q) score += 200;
+
+    // 4. Starts With Bonus (Very important for autocomplete feel)
+    if (name.startsWith(q)) score += 50;
+
+    // 5. Length Penalty 
+    // Penalize results that are much longer than the query to prefer concise matches
+    // e.g. Query "Advil" -> "Advil" (diff 0) vs "Advil Cold and Sinus" (diff 15)
+    const lengthDiff = Math.abs(name.length - q.length);
+    score -= lengthDiff * 1.5;
+
+    return score;
+};
 
 const InteractionForm: React.FC<InteractionFormProps> = ({
   patientId,
@@ -103,6 +140,17 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const [showSaveNotification, setShowSaveNotification] = useState(false);
   const [duplicateMedError, setDuplicateMedError] = useState<string | null>(null);
 
+  // Initialize Fuse.js instance with optimized weights
+  const fuse = useMemo(() => {
+    return new Fuse(drugDatabase, {
+      keys: ['name'],
+      threshold: 0.4, // Slightly looser to allow fuzzy matching, we filter by score later
+      includeScore: true,
+      distance: 100,
+      minMatchCharLength: 2,
+    });
+  }, []);
+
   const toggleAdvanced = (index: number) => {
     setAdvancedVisible(prev => ({...prev, [index]: !prev[index]}));
   };
@@ -118,38 +166,22 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const allergyTags = useMemo(() => allergies.split(',').map(a => a.trim()).filter(Boolean), [allergies]);
 
   const handleAddAllergy = () => {
-    // Split input by commas to handle multiple entries at once
-    const newAllergies = currentAllergy
-        .split(',')
-        .map(a => a.trim())
-        .filter(Boolean);
-
+    const newAllergies = currentAllergy.split(',').map(a => a.trim()).filter(Boolean);
     if (newAllergies.length === 0) {
         setCurrentAllergy('');
         return;
     }
-
-    // Get current tags for duplicate checking (case-insensitive)
     const currentTagsLower = allergyTags.map(a => a.toLowerCase());
-    
-    // Filter out any new tags that are already present
-    const uniqueNewTags = newAllergies.filter(
-        newTag => !currentTagsLower.includes(newTag.toLowerCase())
-    );
-
-    // If there are any unique new tags to add, update the state
+    const uniqueNewTags = newAllergies.filter(newTag => !currentTagsLower.includes(newTag.toLowerCase()));
     if (uniqueNewTags.length > 0) {
         setAllergies([...allergyTags, ...uniqueNewTags].join(', '));
     }
-    
-    // Clear the input field
     setCurrentAllergy('');
   };
   
   const handleRemoveAllergy = (allergyToRemove: string) => {
     setAllergies(allergyTags.filter(a => a !== allergyToRemove).join(', '));
   };
-
 
   // --- Conditions State ---
   const [currentCondition, setCurrentCondition] = useState('');
@@ -212,11 +244,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     }
   };
 
-
   const handleRemoveCondition = (conditionToRemove: string) => {
     setConditions(conditionTags.filter(c => c !== conditionToRemove).join(', '));
   };
-
 
   // --- Pharmacogenetics State ---
   const [pgxFactors, setPgxFactors] = useState<string[]>([]);
@@ -224,14 +254,12 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const [variantAllele, setVariantAllele] = useState('');
   const [metabolizerStatus, setMetabolizerStatus] = useState('');
 
-  // Sync with parent state
   useEffect(() => {
     setPgxFactors(pharmacogenetics.split(',').map(s => s.trim()).filter(Boolean));
   }, [pharmacogenetics]);
 
   const handleAddPgxFactor = () => {
     if (!selectedGene) return;
-    
     let newFactor = selectedGene;
     const trimmedVariant = variantAllele.trim();
     if (trimmedVariant) {
@@ -240,13 +268,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     if (metabolizerStatus) {
       newFactor += ` (${metabolizerStatus})`;
     }
-    
     if (!pgxFactors.includes(newFactor)) {
       const updatedFactors = [...pgxFactors, newFactor];
       setPgxFactors(updatedFactors);
       setPharmacogenetics(updatedFactors.join(', '));
     }
-    
     setSelectedGene('');
     setVariantAllele('');
     setMetabolizerStatus('');
@@ -258,13 +284,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     setPharmacogenetics(updatedFactors.join(', '));
   };
 
-
   // --- Other Substances & Supplements State ---
   const [currentSupplement, setCurrentSupplement] = useState('');
   const [supplementSuggestions, setSupplementSuggestions] = useState<SupplementInfo[]>([]);
   const supplementAutocompleteRef = useRef<HTMLDivElement>(null);
   const [supplementInteractionCache, setSupplementInteractionCache] = useState<Record<string, { status: 'loading' | 'completed' | 'error', data: SupplementInteraction[], error?: string }>>({});
-
 
   const predefinedSubstanceList = useMemo(() => [
     t.substance_st_johns_wort,
@@ -300,31 +324,13 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     const value = e.target.value;
     setCurrentSupplement(value);
     if (value.length > 0) {
-      // FIX: Explicitly type the Set to avoid type inference issues and simplify creation.
       const allAddedSubstances = new Set<string>([...customSupplements, ...Array.from(checkedSubstances)]);
       const filtered = supplementDatabase.filter(
         sup => 
           sup.name.toLowerCase().includes(value.toLowerCase()) &&
           !allAddedSubstances.has(sup.name)
       );
-      
-      const sorted = filtered.sort((a, b) => {
-        const aLower = a.name.toLowerCase();
-        const bLower = b.name.toLowerCase();
-        const queryLower = value.toLowerCase();
-
-        if (aLower === queryLower) return -1;
-        if (bLower === queryLower) return 1;
-
-        const aStartsWith = aLower.startsWith(queryLower);
-        const bStartsWith = bLower.startsWith(queryLower);
-        if (aStartsWith && !bStartsWith) return -1;
-        if (!aStartsWith && bStartsWith) return 1;
-
-        return aLower.localeCompare(bLower);
-      });
-
-      setSupplementSuggestions(sorted);
+      setSupplementSuggestions(filtered);
     } else {
       setSupplementSuggestions([]);
     }
@@ -348,13 +354,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   }, [medications, t, onApiKeyError]);
 
   useEffect(() => {
-    // When medications change, re-analyze all custom supplements.
     if(customSupplements.length > 0) {
         customSupplements.forEach(sup => fetchInteractionForSupplement(sup));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medications]);
-
 
   const handleAddSupplement = (name?: string) => {
     const supplementToAdd = (name || currentSupplement).trim();
@@ -403,6 +407,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     const medToAdd = currentMedication.trim();
     if (!medToAdd) return;
     
+    // Exact match check (Case-insensitive)
     if (medications.some(m => m.name.toLowerCase() === medToAdd.toLowerCase())) {
         setDuplicateMedError(t.form_med_duplicate_error);
         return;
@@ -420,142 +425,132 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     if (duplicateMedError) setDuplicateMedError(null);
   };
 
+  // --- Optimized Medication Search Logic with Fuzzy Matching & Weighted Scoring ---
   useEffect(() => {
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     if (debouncedMedSearch.length < 2) {
       setSuggestions([]);
+      setIsFetchingMeds(false);
       return;
     }
 
-    const searchMedications = async () => {
+    const fetchSuggestions = async () => {
       setIsFetchingMeds(true);
-      const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
       const queryLower = debouncedMedSearch.toLowerCase();
       const genericName = drugSynonymMap[queryLower];
+      const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 
-      // 1. Local search from our curated database with Fuzzy Matching
-      const localSuggestions: DisplaySuggestion[] = drugDatabase
-        .map(drug => {
-            const drugLower = drug.name.toLowerCase();
-            const similarity = getSimilarityScore(drugLower, queryLower);
-            return { ...drug, source: 'local', similarity };
-        })
-        .filter(drug => {
-            const drugLower = drug.name.toLowerCase();
-            const isMatch = 
-                drugLower.includes(queryLower) || 
-                (genericName && drugLower.includes(genericName.toLowerCase())) ||
-                // Allow fuzzy matches if similarity is reasonably high (e.g. > 0.6)
-                (drug.similarity && drug.similarity > 0.6); 
-            return isMatch;
-        }) as DisplaySuggestion[];
-
-      // 2. API search from openFDA for broader results
-      let apiSuggestions: DisplaySuggestion[] = [];
       try {
-        const searchTerms = new Set<string>();
-        searchTerms.add(queryLower);
-        if (genericName) {
-          searchTerms.add(genericName.toLowerCase());
-        }
+        const combined = new Map<string, DisplaySuggestion>();
 
-        // Broader query with fuzzy matching (~1) for misspellings across multiple fields
-        const fieldQueries = Array.from(searchTerms).map(term =>
-            `(generic_name:${term}~1 OR brand_name:${term}~1 OR active_ingredients.name:${term}~1)`
-        );
-        const searchQuery = fieldQueries.join(' OR ');
-        
-        const response = await fetch(`https://api.fda.gov/drug/ndc.json?search=${encodeURIComponent(searchQuery)}&limit=20`);
-        if (response.ok) {
-          const data = await response.json();
-          const uniqueNames = new Set<string>();
-          apiSuggestions = (data.results || []).reduce((acc: DisplaySuggestion[], drug: any) => {
-            const brandName = drug.brand_name ? toTitleCase(drug.brand_name) : null;
-            const genericNameFromApi = drug.generic_name ? toTitleCase(drug.generic_name.split(',')[0].trim()) : null;
-            
-            if (brandName && !uniqueNames.has(brandName.toLowerCase())) {
-              acc.push({ name: brandName, source: 'api' });
-              uniqueNames.add(brandName.toLowerCase());
-            }
-            if (genericNameFromApi && !uniqueNames.has(genericNameFromApi.toLowerCase())) {
-              acc.push({ name: genericNameFromApi, source: 'api' });
-              uniqueNames.add(genericNameFromApi.toLowerCase());
-            }
-            return acc;
-          }, []);
-        }
-      } catch (error) {
-        console.error("Failed to fetch medication suggestions:", error);
-      }
-
-      // 3. Merge, giving priority to local results for duplicates
-      const combined = new Map<string, DisplaySuggestion>();
-      localSuggestions.forEach(s => combined.set(s.name.toLowerCase(), s));
-      apiSuggestions.forEach(s => {
-        if (!combined.has(s.name.toLowerCase())) {
-          combined.set(s.name.toLowerCase(), s);
-        }
-      });
-      
-      medications.forEach(med => combined.delete(med.name.toLowerCase()));
-
-      const sortedSuggestions = Array.from(combined.values())
-        .map((s) => {
-            const suggestion: DisplaySuggestion = { ...s };
-            // Calculate similarity if missing (e.g. from API source) for sorting purposes
-            if (suggestion.similarity === undefined) {
-                suggestion.similarity = getSimilarityScore(suggestion.name.toLowerCase(), queryLower);
-            }
-
-            if (genericName && s.name.toLowerCase() === genericName.toLowerCase()) {
-                suggestion.subtitle = `Generic for ${toTitleCase(debouncedMedSearch)}`;
-            }
-            return suggestion;
-        })
-        .sort((a, b) => {
-            const calculateScore = (item: DisplaySuggestion): number => {
-                let score = 0;
-                const itemLower = item.name.toLowerCase();
-                const genericLower = genericName ? genericName.toLowerCase() : null;
-
-                // Match quality score
-                if (itemLower === queryLower) score += 100; // Exact match
-                else if (genericLower && itemLower === genericLower) score += 90; // Exact generic match
-                else if (itemLower.startsWith(queryLower)) score += 50; // Starts with query
-                else if (itemLower.includes(queryLower)) score += 20; // Contains query
-
-                // Fuzzy Similarity score component (weighted)
-                if (item.similarity) {
-                    score += item.similarity * 40; 
-                }
-
-                // Source & Quality score
-                if (item.source === 'local') score += 30; // Boost local results more
-                if (item.commonDosage) score += 10; // Bonus for curated data
-
-                return score;
-            };
-
-            const scoreA = calculateScore(a);
-            const scoreB = calculateScore(b);
-
-            if (scoreB !== scoreA) {
-                return scoreB - scoreA; // Higher score first
-            }
-            
-            return a.name.localeCompare(b.name); // Alphabetical fallback
+        // 1. Local Search (Fuse.js)
+        const fuseResults = fuse.search(debouncedMedSearch);
+        fuseResults.forEach(result => {
+            // Apply unified scoring
+            const score = calculateRelevance(result.item, debouncedMedSearch, 'local', result.score);
+            combined.set(result.item.name.toLowerCase(), {
+                ...result.item,
+                source: 'local',
+                matchScore: score
+            });
         });
 
-      setSuggestions(sortedSuggestions.slice(0, 15)); // Limit to top 15 results
-      setIsFetchingMeds(false);
+        // 2. Exact Synonym Match
+        // If the user typed a brand name (e.g. "Advil"), ensure the Generic (Ibuprofen) is boosted.
+        if (genericName) {
+            const exactLocal = drugDatabase.find(d => d.name.toLowerCase() === genericName.toLowerCase());
+            if (exactLocal) {
+                // Boost synonyms significantly
+                const score = calculateRelevance(exactLocal, debouncedMedSearch, 'local') + 100;
+                combined.set(exactLocal.name.toLowerCase(), { 
+                    ...exactLocal, 
+                    source: 'local', 
+                    matchScore: score,
+                    subtitle: `${t.form_medications_placeholder} (${toTitleCase(debouncedMedSearch)})`
+                });
+            }
+        }
+
+        // 3. API Search (Async)
+        // Only fetch if local results are sparse or query is specific enough
+        const searchTerms = new Set<string>([queryLower]);
+        if (genericName) searchTerms.add(genericName.toLowerCase());
+
+        const apiQuery = Array.from(searchTerms)
+            .map(term => `(openfda.brand_name:"${term}"^2 OR openfda.generic_name:"${term}" OR openfda.substance_name:"${term}")`)
+            .join(' OR ');
+        
+        try {
+            const response = await fetch(
+                `https://api.fda.gov/drug/ndc.json?search=${encodeURIComponent(apiQuery)}&limit=8`, 
+                { signal } 
+            );
+            
+            if (response.ok) {
+                const data = await response.json();
+                
+                (data.results || []).forEach((drug: any) => {
+                    const processApiDrug = (nameRaw: string, type: 'Brand' | 'Generic') => {
+                        const name = toTitleCase(nameRaw.split(',')[0].trim()); // Clean up name
+                        if (name.length > 50) return; // Skip overly long descriptions
+                        
+                        const key = name.toLowerCase();
+                        // Only add if not already present (Local takes precedence usually, but we check score)
+                        if (!combined.has(key)) {
+                            const score = calculateRelevance({ name }, debouncedMedSearch, 'api');
+                            combined.set(key, { 
+                                name, 
+                                source: 'api', 
+                                matchScore: score 
+                            });
+                        }
+                    };
+
+                    if (drug.brand_name) processApiDrug(drug.brand_name, 'Brand');
+                    if (drug.generic_name) processApiDrug(drug.generic_name, 'Generic');
+                });
+            }
+        } catch (error: any) {
+            if (error.name !== 'AbortError') {
+                console.warn("API Search failed", error);
+            }
+        }
+
+        if (signal.aborted) return;
+
+        // 4. Filter, Sort and Slice
+        // Remove already selected medications
+        medications.forEach(med => combined.delete(med.name.toLowerCase()));
+
+        const sortedSuggestions = Array.from(combined.values())
+            .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+            .slice(0, 10);
+
+        setSuggestions(sortedSuggestions);
+      
+      } catch (err) {
+          console.error("Autocomplete flow error", err);
+      } finally {
+          if (!signal.aborted) {
+              setIsFetchingMeds(false);
+          }
+      }
     };
 
-    searchMedications();
-  }, [debouncedMedSearch, medications]);
+    fetchSuggestions();
+
+    return () => {
+        controller.abort();
+    };
+  }, [debouncedMedSearch, medications, fuse, t]);
 
   const handleSuggestionClick = (suggestion: DisplaySuggestion) => {
+    // Exact match check (Case-insensitive)
     if (medications.some(m => m.name.toLowerCase() === suggestion.name.toLowerCase())) {
         setDuplicateMedError(t.form_med_duplicate_error);
-        setSuggestions([]);
+        setSuggestions([]); // Clear suggestions to show error cleanly, or keep them? Clearing is standard.
         return;
     }
     
@@ -622,10 +617,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     }
 
     const [day, month, year] = value.split('-').map(Number);
-    // JavaScript months are 0-indexed, so subtract 1 from month.
     const date = new Date(year, month - 1, day);
     
-    // Check if the constructed date is valid and matches the input parts.
     if (date.getFullYear() !== year || date.getMonth() + 1 !== month || date.getDate() !== day) {
       setDobError(t.form_dob_error_invalid);
     } else if (date > new Date()) {
@@ -636,7 +629,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   };
   
   const isExistingProfile = existingPatientIds.has(patientId);
-  const canAccessPgx = permissions.canAccessBatchAnalysis; // Using this permission as proxy for Pro
+  const canAccessPgx = permissions.canAccessBatchAnalysis; 
 
   return (
     <div className={`space-y-6`}>
@@ -666,7 +659,11 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             onChange={handleMedicationInputChange}
             onKeyDown={handleKeyDown}
             placeholder={t.form_medications_placeholder}
-            className="flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
+            className={`flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border rounded-md shadow-sm placeholder-slate-400 focus:outline-none sm:text-sm transition duration-200 ${
+                duplicateMedError 
+                ? 'border-red-500 focus:ring-red-500 focus:border-red-500' 
+                : 'border-slate-300 dark:border-slate-600 focus:ring-blue-500 focus:border-blue-500'
+            }`}
             autoComplete="off"
           />
           <button

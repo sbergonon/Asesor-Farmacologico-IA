@@ -1,5 +1,4 @@
 
-
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react';
 import { 
   User, 
@@ -8,7 +7,8 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail as firebaseSendPasswordResetEmail
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, googleProvider, db } from '../services/firebase';
@@ -24,6 +24,7 @@ interface AuthContextType {
   loginAsDemo: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
   registerWithEmail: (email: string, password: string, name: string, institution: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -149,6 +150,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+      try {
+          await firebaseSendPasswordResetEmail(auth, email);
+      } catch (error) {
+          console.error("Error sending password reset email:", error);
+          throw error;
+      }
+  };
+
   const loginAsDemo = async () => {
       setLoading(true);
       // Create a fake user object conforming to Firebase User interface (partially)
@@ -205,7 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const permissions = useMemo(() => getPermissions(userRole), [userRole]);
 
   return (
-    <AuthContext.Provider value={{ user, userProfile, userRole, permissions, loading, signInWithGoogle, loginAsDemo, loginWithEmail, registerWithEmail, logout }}>
+    <AuthContext.Provider value={{ user, userProfile, userRole, permissions, loading, signInWithGoogle, loginAsDemo, loginWithEmail, registerWithEmail, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );

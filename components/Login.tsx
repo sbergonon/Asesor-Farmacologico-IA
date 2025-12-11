@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import SparklesIcon from './icons/SparklesIcon';
@@ -17,8 +16,9 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ t }) => {
-  const { signInWithGoogle, loginAsDemo, loginWithEmail, registerWithEmail, loading } = useAuth();
+  const { signInWithGoogle, loginAsDemo, loginWithEmail, registerWithEmail, resetPassword, loading } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [fullUrl, setFullUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -32,6 +32,7 @@ const Login: React.FC<LoginProps> = ({ t }) => {
   const [name, setName] = useState('');
   const [institution, setInstitution] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   useEffect(() => {
     // Detect if we are in a dev environment (localhost or generic preview domains)
@@ -69,8 +70,25 @@ const Login: React.FC<LoginProps> = ({ t }) => {
   const handleEmailAuth = async (e: React.FormEvent) => {
       e.preventDefault();
       setError(null);
+      setSuccessMsg(null);
       
-      if (!email || !password) {
+      if (!email) {
+          setError(t.login_email_label + " required.");
+          return;
+      }
+
+      if (isResettingPassword) {
+          try {
+              await resetPassword(email);
+              setSuccessMsg("Correo de recuperación enviado. Revisa tu bandeja de entrada.");
+              setIsResettingPassword(false);
+          } catch (err: any) {
+              handleAuthError(err);
+          }
+          return;
+      }
+      
+      if (!password) {
           setError(t.login_error_invalid_credential);
           return;
       }
@@ -264,36 +282,47 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                     <span className="break-words w-full whitespace-pre-wrap">{error}</span>
                 </div>
             )}
-
-            <button
-              onClick={handleGoogleLogin}
-              disabled={loading}
-              className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 mb-4"
-            >
-              {loading ? (
-                 <svg className="animate-spin h-5 w-5 mr-3 text-slate-700 dark:text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5 mr-3" />
-              )}
-              <span className="font-medium">{t.login_button_google}</span>
-            </button>
             
-            <div className="relative mb-6">
-                <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+            {successMsg && (
+                <div className="mb-4 p-3 bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-lg text-sm flex items-start text-left">
+                    <CheckCircleIcon className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                    <span>{successMsg}</span>
                 </div>
-                <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                    {t.login_separator_or}
-                </span>
+            )}
+
+            {!isResettingPassword && (
+                <button
+                onClick={handleGoogleLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 mb-4"
+                >
+                {loading ? (
+                    <svg className="animate-spin h-5 w-5 mr-3 text-slate-700 dark:text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                ) : (
+                    <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5 mr-3" />
+                )}
+                <span className="font-medium">{t.login_button_google}</span>
+                </button>
+            )}
+            
+            {!isResettingPassword && (
+                <div className="relative mb-6">
+                    <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                    <span className="px-2 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                        {t.login_separator_or}
+                    </span>
+                    </div>
                 </div>
-            </div>
+            )}
 
             <form onSubmit={handleEmailAuth} className="space-y-4 mb-4 text-left">
-                {isRegistering && (
+                {isRegistering && !isResettingPassword && (
                     <>
                         <div>
                             <label htmlFor="name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
@@ -335,19 +364,21 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                         className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                 </div>
-                <div>
-                    <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                        {t.login_password_label}
-                    </label>
-                    <input
-                        type="password"
-                        id="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    />
-                </div>
+                {!isResettingPassword && (
+                    <div>
+                        <label htmlFor="password" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                            {t.login_password_label}
+                        </label>
+                        <input
+                            type="password"
+                            id="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                    </div>
+                )}
                 
                 <button
                     type="submit"
@@ -360,20 +391,39 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
                     ) : (
-                        isRegistering ? t.login_button_register : t.login_button_signin
+                        isResettingPassword ? "Enviar correo de recuperación" : (isRegistering ? t.login_button_register : t.login_button_signin)
                     )}
                 </button>
             </form>
 
-            <button
-                onClick={() => setIsRegistering(!isRegistering)}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline mb-6 focus:outline-none"
-            >
-                {isRegistering ? t.login_switch_to_login : t.login_switch_to_register}
-            </button>
+            <div className="flex flex-col space-y-2 mb-6 text-center">
+                {!isResettingPassword ? (
+                    <>
+                        <button
+                            onClick={() => setIsRegistering(!isRegistering)}
+                            className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
+                        >
+                            {isRegistering ? t.login_switch_to_login : t.login_switch_to_register}
+                        </button>
+                        <button
+                            onClick={() => { setIsResettingPassword(true); setError(null); }}
+                            className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline focus:outline-none"
+                        >
+                            ¿Olvidaste tu contraseña?
+                        </button>
+                    </>
+                ) : (
+                    <button
+                        onClick={() => { setIsResettingPassword(false); setError(null); }}
+                        className="text-sm text-blue-600 dark:text-blue-400 hover:underline focus:outline-none"
+                    >
+                        Volver al inicio de sesión
+                    </button>
+                )}
+            </div>
             
             {/* Show Demo button if in Dev Env OR if there was an auth error (fallback) */}
-            {(isDevEnvironment || error) && (
+            {(isDevEnvironment || error) && !isResettingPassword && (
               <>
                 <div className="relative mb-4">
                   <div className="absolute inset-0 flex items-center">

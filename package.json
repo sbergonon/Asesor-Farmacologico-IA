@@ -15,7 +15,8 @@
     "jspdf": "2.5.1",
     "html2canvas": "1.4.1",
     "papaparse": "5.4.1",
-    "firebase": "^12.6.0"
+    "firebase": "^12.6.0",
+    "fuse.js": "6.6.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
