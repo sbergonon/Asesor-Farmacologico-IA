@@ -10,6 +10,7 @@ import ManualModal from './ManualModal';
 import InfoCircleIcon from './icons/InfoCircleIcon';
 import UserGroupIcon from './icons/UserGroupIcon';
 import DocumentTextIcon from './icons/DocumentTextIcon';
+import { isFirebaseConfigured } from '../services/firebase';
 
 interface LoginProps {
   t: any;
@@ -56,6 +57,11 @@ const Login: React.FC<LoginProps> = ({ t }) => {
   }, []);
 
   const handleGoogleLogin = async () => {
+    if (!isFirebaseConfigured) {
+        setError("Firebase no está configurado (Falta VITE_FIREBASE_API_KEY). Por favor usa el Modo Demo.");
+        return;
+    }
+
     setError(null);
     setUnauthorizedDomain(null);
     setFullUrl(null);
@@ -115,6 +121,18 @@ const Login: React.FC<LoginProps> = ({ t }) => {
       const errorCode = e?.code || '';
       const errorMessage = e?.message || '';
       const errorString = String(e);
+
+      // Check for 'auth/api-key-not-valid' (Missing/Invalid Config)
+      const isInvalidApiKey = 
+        errorCode === 'auth/api-key-not-valid' ||
+        errorMessage.includes('api-key-not-valid') ||
+        errorString.includes('api-key-not-valid') ||
+        errorMessage.includes('please-pass-a-valid-api-key');
+
+      if (isInvalidApiKey) {
+          setError("Error de Configuración: La API Key de Firebase no es válida o falta. \n\nPor favor, verifica que la variable de entorno 'VITE_FIREBASE_API_KEY' esté configurada correctamente en tu panel de hosting. \n\nMientras tanto, puedes usar el 'Modo Demo'.");
+          return;
+      }
 
       // Check for unauthorized domain error variants
       const isUnauthorizedDomain = 
@@ -183,7 +201,6 @@ const Login: React.FC<LoginProps> = ({ t }) => {
       }
 
       // Show specific error info in generic message to help debugging if none matched
-      const currentDomain = window.location.hostname || window.location.host;
       setError(`${t.login_error_generic} \n(${errorMessage})`);
   };
 
@@ -235,7 +252,7 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                  <p className="font-semibold mb-1">{t.login_domain_step_1}</p>
                  <button 
                   onClick={copyDomain}
-                  className="flex items-center justify-between w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 font-mono text-xs hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
+                  className="flex items-center justify-center w-full p-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded text-slate-600 dark:text-slate-300 font-mono text-xs hover:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
                  >
                    <span className="truncate mr-2 font-bold">{unauthorizedDomain}</span>
                    {copied ? <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" /> : <CopyIcon className="h-4 w-4 flex-shrink-0" />}
@@ -293,8 +310,8 @@ const Login: React.FC<LoginProps> = ({ t }) => {
             {!isResettingPassword && (
                 <button
                 onClick={handleGoogleLogin}
-                disabled={loading}
-                className="w-full flex items-center justify-center px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-white hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 mb-4"
+                disabled={loading || !isFirebaseConfigured}
+                className={`w-full flex items-center justify-center px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg shadow-sm bg-white dark:bg-slate-700 text-slate-700 dark:text-white transition-all duration-200 mb-4 ${!isFirebaseConfigured ? 'opacity-50 cursor-not-allowed hover:bg-white dark:hover:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'}`}
                 >
                 {loading ? (
                     <svg className="animate-spin h-5 w-5 mr-3 text-slate-700 dark:text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -304,7 +321,9 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                 ) : (
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="h-5 w-5 mr-3" />
                 )}
-                <span className="font-medium">{t.login_button_google}</span>
+                <span className="font-medium">
+                    {isFirebaseConfigured ? t.login_button_google : "Login Google Deshabilitado (Falta API Key)"}
+                </span>
                 </button>
             )}
             
@@ -382,8 +401,8 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                 
                 <button
                     type="submit"
-                    disabled={loading}
-                    className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 transition-colors"
+                    disabled={loading || !isFirebaseConfigured}
+                    className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white transition-colors ${!isFirebaseConfigured ? 'bg-teal-800 opacity-50 cursor-not-allowed' : 'bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500'}`}
                 >
                     {loading ? (
                         <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -422,8 +441,8 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                 )}
             </div>
             
-            {/* Show Demo button if in Dev Env OR if there was an auth error (fallback) */}
-            {(isDevEnvironment || error) && !isResettingPassword && (
+            {/* Show Demo button if in Dev Env OR if there was an auth error (fallback) OR if firebase is missing */}
+            {(isDevEnvironment || error || !isFirebaseConfigured) && !isResettingPassword && (
               <>
                 <div className="relative mb-4">
                   <div className="absolute inset-0 flex items-center">

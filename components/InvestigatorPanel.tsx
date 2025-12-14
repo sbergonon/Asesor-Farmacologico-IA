@@ -5,6 +5,7 @@ import { investigateSymptoms } from '../services/geminiService';
 import SparklesIcon from './icons/SparklesIcon';
 import AlertTriangleIcon from './icons/AlertTriangleIcon';
 import DownloadIcon from './icons/DownloadIcon';
+import ShareIcon from './icons/ShareIcon';
 import { ApiKeyError } from '../types';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -43,6 +44,43 @@ const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, cond
         }
     } finally {
         setIsLoading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!result) return;
+
+    // Build plain text summary
+    const matchesSummary = result.matches.length > 0 
+        ? result.matches.map(m => `- ${m.cause} (${m.probability}): ${m.mechanism}`).join('\n')
+        : "Sin coincidencias directas.";
+
+    const summaryText = [
+        `🕵️‍♂️ ${t.investigator_title} - Informe`,
+        `Síntoma: ${symptoms}`,
+        '',
+        'CAUSAS POTENCIALES:',
+        matchesSummary,
+        '',
+        'Nota: Generado por IA. Consulte a un médico.',
+    ].join('\n');
+
+    const shareData = {
+        title: 'Investigación Clínica',
+        text: summaryText,
+    };
+
+    if (navigator.share) {
+        try {
+            await navigator.share(shareData);
+        } catch (err) {
+            console.log('Share cancelled', err);
+        }
+    } else {
+        // Fallback mailto
+        const subject = encodeURIComponent("Informe de Investigación Clínica");
+        const body = encodeURIComponent(summaryText);
+        window.location.href = `mailto:?subject=${subject}&body=${body}`;
     }
   };
 
@@ -250,11 +288,19 @@ const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, cond
                     )}
                 </div>
 
-                <div className="flex justify-end">
+                <div className="flex flex-col sm:flex-row justify-end gap-3">
+                    <button
+                        onClick={handleShare}
+                        className="inline-flex items-center justify-center py-2 px-4 border border-blue-200 dark:border-blue-800 rounded-lg shadow-sm text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto"
+                    >
+                        <ShareIcon className="h-5 w-5 mr-2" />
+                        Compartir / Email
+                    </button>
+
                     <button
                         onClick={handleExportPdf}
                         disabled={isExportingPdf}
-                        className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:opacity-50 transition-colors duration-200"
+                        className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:opacity-50 transition-colors duration-200 w-full sm:w-auto"
                     >
                         {isExportingPdf ? (
                             <>
