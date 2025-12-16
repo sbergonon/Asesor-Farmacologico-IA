@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
@@ -17,10 +16,10 @@ import AlertTriangleIcon from './icons/AlertTriangleIcon';
 import { drugSynonymMap } from '../data/drugSynonyms';
 import { commonConditions } from '../data/conditions';
 import ProBadge from './ProBadge';
-import { getSimilarityScore } from '../utils/fuzzy';
 import ProactiveAlerts from './ProactiveAlerts';
 import { useAuth } from '../contexts/AuthContext';
 import LockIcon from './icons/LockIcon';
+import MedicationItem from './MedicationItem';
 
 interface InteractionFormProps {
   patientId: string;
@@ -65,17 +64,29 @@ interface DisplaySuggestion extends DrugInfo {
   subtitle?: string;
   source: 'local' | 'api';
   matchScore?: number; // Used for final sorting (higher is better)
+  matchedTerm?: string;
+  type?: 'generic' | 'brand'; // Track if it was a generic or brand match
+  genericName?: string; // Keep track of the underlying generic
+}
+
+// Search Item interface for Fuse
+interface SearchItem {
+    term: string; // The text to search (Brand or Generic name)
+    type: 'generic' | 'brand';
+    genericName: string; // The target generic name
+    data: DrugInfo; // The full drug info
 }
 
 // Helper to calculate a unified relevance score
-const calculateRelevance = (item: DrugInfo, query: string, source: 'local' | 'api', fuseScore?: number): number => {
+const calculateRelevance = (item: DisplaySuggestion, query: string, lang: string, fuseScore?: number): number => {
     let score = 0;
     const name = item.name.toLowerCase();
+    const matchedTerm = (item.matchedTerm || item.name).toLowerCase();
     const q = query.toLowerCase();
 
     // 1. Fuzzy Score (Base)
     if (fuseScore !== undefined) {
-        // Fuse score is 0 (perfect) to 1 (bad). Invert it.
+        // Fuse score is 0 (perfect) to 1 (bad). Invert it to 0-100.
         score += (1 - fuseScore) * 100;
     } else {
         // Fallback for API results without Fuse score
@@ -85,21 +96,29 @@ const calculateRelevance = (item: DrugInfo, query: string, source: 'local' | 'ap
         else score += 40;
     }
 
-    // 2. Source Priority
-    // We trust our local database curations slightly more for formatting
-    if (source === 'local') score += 15;
+    // 2. Source Priority (Local is trusted/curated)
+    if (item.source === 'local') score += 100; // Increased priority for local
 
     // 3. Exact Match Bonus (Huge boost)
-    if (name === q) score += 200;
+    if (matchedTerm === q) score += 300;
 
-    // 4. Starts With Bonus (Very important for autocomplete feel)
-    if (name.startsWith(q)) score += 50;
+    // 4. Starts With Bonus (Critical for autocomplete feel)
+    if (matchedTerm.startsWith(q)) score += 150;
 
-    // 5. Length Penalty 
+    // 5. Word Starts With Bonus (e.g. "acid" in "Valproic acid")
+    if (matchedTerm.includes(' ' + q)) score += 50;
+
+    // 6. Length Penalty 
     // Penalize results that are much longer than the query to prefer concise matches
-    // e.g. Query "Advil" -> "Advil" (diff 0) vs "Advil Cold and Sinus" (diff 15)
-    const lengthDiff = Math.abs(name.length - q.length);
+    const lengthDiff = Math.abs(matchedTerm.length - q.length);
     score -= lengthDiff * 1.5;
+
+    // 7. Language Preference Bonus
+    // If interface is Spanish, boost 'brand' matches (which contain Spanish synonyms like 'Ibuprofeno')
+    // slightly over English generics (like 'Ibuprofen') if scores are otherwise close.
+    if (lang === 'es' && item.type === 'brand') {
+        score += 25; 
+    }
 
     return score;
 };
@@ -136,25 +155,51 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [dobError, setDobError] = useState<string | null>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
-  const [advancedVisible, setAdvancedVisible] = useState<Record<number, boolean>>({});
   const [showSaveNotification, setShowSaveNotification] = useState(false);
   const [duplicateMedError, setDuplicateMedError] = useState<string | null>(null);
 
-  // Initialize Fuse.js instance with optimized weights
+  // Prepare a unified search index for Fuse (Generics + Brands)
+  const searchIndex = useMemo<SearchItem[]>(() => {
+      const list: SearchItem[] = [];
+      
+      // 1. Add Generics
+      drugDatabase.forEach(d => {
+          list.push({ 
+              term: d.name, 
+              type: 'generic', 
+              genericName: d.name, 
+              data: d 
+          });
+      });
+
+      // 2. Add Brands/Synonyms
+      Object.entries(drugSynonymMap).forEach(([brand, generic]) => {
+          // Find the generic info if it exists in our DB, otherwise stub it
+          const genericInfo = drugDatabase.find(d => d.name.toLowerCase() === generic.toLowerCase()) 
+              || { name: generic, dosage: '', frequency: '' }; // Stub for known synonyms not in main DB
+          
+          list.push({
+              term: brand, // The fuzzy search target (e.g. "advil")
+              type: 'brand',
+              genericName: genericInfo.name, // The result (e.g. "Ibuprofen")
+              data: genericInfo
+          });
+      });
+
+      return list;
+  }, []);
+
+  // Initialize Fuse.js with the unified index
   const fuse = useMemo(() => {
-    return new Fuse(drugDatabase, {
-      keys: ['name'],
-      threshold: 0.4, // Slightly looser to allow fuzzy matching, we filter by score later
+    return new Fuse(searchIndex, {
+      keys: ['term'],
+      threshold: 0.35, // Sensitivity: 0.0 is exact match, 1.0 matches anything. 0.35 handles typos well.
       includeScore: true,
       distance: 100,
       minMatchCharLength: 2,
     });
-  }, []);
+  }, [searchIndex]);
 
-  const toggleAdvanced = (index: number) => {
-    setAdvancedVisible(prev => ({...prev, [index]: !prev[index]}));
-  };
-  
   const handleSaveProfile = () => {
     onSaveProfile();
     setShowSaveNotification(true);
@@ -292,10 +337,17 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
   const predefinedSubstanceList = useMemo(() => [
     t.substance_st_johns_wort,
-    t.substance_alcohol,
-    t.substance_tobacco,
+    t.substance_melatonin,
+    t.substance_omega3,
+    t.substance_vitamin_d,
+    t.substance_magnesium,
+    t.substance_probiotics,
+    t.substance_collagen,
+    t.substance_mushrooms,
     t.substance_grapefruit_juice,
     t.substance_cranberry_juice,
+    t.substance_alcohol,
+    t.substance_tobacco,
   ], [t]);
 
   const { checkedSubstances, customSupplements } = useMemo<{ checkedSubstances: Set<string>; customSupplements: string[] }>(() => {
@@ -425,13 +477,21 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     if (duplicateMedError) setDuplicateMedError(null);
   };
 
+  // Clear suggestions immediately when input is short/empty, improving responsiveness
+  useEffect(() => {
+      if (currentMedication.length < 2) {
+          setSuggestions([]);
+          setIsFetchingMeds(false);
+      }
+  }, [currentMedication]);
+
   // --- Optimized Medication Search Logic with Fuzzy Matching & Weighted Scoring ---
   useEffect(() => {
     const controller = new AbortController();
     const signal = controller.signal;
 
     if (debouncedMedSearch.length < 2) {
-      setSuggestions([]);
+      // Logic handled by immediate effect above, but double check here to prevent stale fetches
       setIsFetchingMeds(false);
       return;
     }
@@ -439,90 +499,116 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     const fetchSuggestions = async () => {
       setIsFetchingMeds(true);
       const queryLower = debouncedMedSearch.toLowerCase();
-      const genericName = drugSynonymMap[queryLower];
       const toTitleCase = (str: string) => str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
 
       try {
         const combined = new Map<string, DisplaySuggestion>();
 
-        // 1. Local Search (Fuse.js)
+        // 1. Local Search (Fuse.js) against Generics AND Brands
+        // This handles "Tyelnol" -> "Tylenol" (brand) -> "Acetaminophen" (generic)
+        // And "Acetamino" -> "Acetaminophen" (generic)
         const fuseResults = fuse.search(debouncedMedSearch);
+        
+        let maxLocalScore = 0;
+
         fuseResults.forEach(result => {
-            // Apply unified scoring
-            const score = calculateRelevance(result.item, debouncedMedSearch, 'local', result.score);
-            combined.set(result.item.name.toLowerCase(), {
-                ...result.item,
+            const genericName = result.item.genericName;
+            const genericKey = genericName.toLowerCase();
+            const isBrandMatch = result.item.type === 'brand';
+            const matchedNameTitle = toTitleCase(result.item.term);
+            
+            // Prioritize displaying the term the user actually matched against (e.g., "Paracetamol" vs "Acetaminophen")
+            // This is crucial for Spanish users who expect to see "Paracetamol" in the list.
+            const suggestion: DisplaySuggestion = {
+                ...result.item.data, // Contains dosage/freq if available
+                name: isBrandMatch ? matchedNameTitle : genericName,   
                 source: 'local',
-                matchScore: score
-            });
+                matchedTerm: result.item.term,
+                type: result.item.type,
+                genericName: genericName 
+            };
+
+            // Calculate relevance score
+            const score = calculateRelevance(suggestion, debouncedMedSearch, t.lang_code, result.score);
+            maxLocalScore = Math.max(maxLocalScore, score);
+
+            // De-duplication Logic:
+            // If we already have this generic (keyed by genericKey), keep the one with the higher score.
+            // E.g. "Paracetamol" (Synonym) vs "Acetaminophen" (Generic). If user typed "Paracet", synonym wins.
+            const existing = combined.get(genericKey);
+            if (!existing || (score > (existing.matchScore || 0))) {
+                if (isBrandMatch) {
+                    // Show the generic name as subtitle if the main title is the brand/synonym
+                    suggestion.subtitle = genericName;
+                }
+                suggestion.matchScore = score;
+                combined.set(genericKey, suggestion);
+            }
         });
 
-        // 2. Exact Synonym Match
-        // If the user typed a brand name (e.g. "Advil"), ensure the Generic (Ibuprofen) is boosted.
-        if (genericName) {
-            const exactLocal = drugDatabase.find(d => d.name.toLowerCase() === genericName.toLowerCase());
-            if (exactLocal) {
-                // Boost synonyms significantly
-                const score = calculateRelevance(exactLocal, debouncedMedSearch, 'local') + 100;
-                combined.set(exactLocal.name.toLowerCase(), { 
-                    ...exactLocal, 
-                    source: 'local', 
-                    matchScore: score,
-                    subtitle: `${t.form_medications_placeholder} (${toTitleCase(debouncedMedSearch)})`
-                });
-            }
-        }
+        // 2. API Search (Async) - Fallback for rarer drugs
+        // Optimization: Skip API if we have an exact or high-quality match locally (score > 300)
+        // This saves API calls when the user types a known drug or synonym exactly.
+        const shouldFetchApi = maxLocalScore < 300; 
 
-        // 3. API Search (Async)
-        // Only fetch if local results are sparse or query is specific enough
-        const searchTerms = new Set<string>([queryLower]);
-        if (genericName) searchTerms.add(genericName.toLowerCase());
-
-        const apiQuery = Array.from(searchTerms)
-            .map(term => `(openfda.brand_name:"${term}"^2 OR openfda.generic_name:"${term}" OR openfda.substance_name:"${term}")`)
-            .join(' OR ');
-        
-        try {
-            const response = await fetch(
-                `https://api.fda.gov/drug/ndc.json?search=${encodeURIComponent(apiQuery)}&limit=8`, 
-                { signal } 
-            );
+        if (shouldFetchApi) {
+            const searchTerms = new Set<string>([queryLower]);
+            // Search for brand, generic, or substance name
+            const apiQuery = Array.from(searchTerms)
+                .map(term => `(openfda.brand_name:"${term}"^2 OR openfda.generic_name:"${term}" OR openfda.substance_name:"${term}")`)
+                .join(' OR ');
             
-            if (response.ok) {
-                const data = await response.json();
+            try {
+                const response = await fetch(
+                    `https://api.fda.gov/drug/ndc.json?search=${encodeURIComponent(apiQuery)}&limit=8`, 
+                    { signal } 
+                );
                 
-                (data.results || []).forEach((drug: any) => {
-                    const processApiDrug = (nameRaw: string, type: 'Brand' | 'Generic') => {
-                        const name = toTitleCase(nameRaw.split(',')[0].trim()); // Clean up name
-                        if (name.length > 50) return; // Skip overly long descriptions
-                        
-                        const key = name.toLowerCase();
-                        // Only add if not already present (Local takes precedence usually, but we check score)
-                        if (!combined.has(key)) {
-                            const score = calculateRelevance({ name }, debouncedMedSearch, 'api');
-                            combined.set(key, { 
-                                name, 
-                                source: 'api', 
-                                matchScore: score 
-                            });
-                        }
-                    };
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    (data.results || []).forEach((drug: any) => {
+                        const processApiDrug = (nameRaw: string) => {
+                            const name = toTitleCase(nameRaw.split(',')[0].trim()); // Clean up name
+                            if (name.length > 50) return; // Skip overly long descriptions
+                            
+                            const key = name.toLowerCase();
+                            
+                            // Add if not present (Local prioritized by score usually, but let's calculate)
+                            const suggestion: DisplaySuggestion = { name, source: 'api', type: 'generic' };
+                            const score = calculateRelevance(suggestion, debouncedMedSearch, t.lang_code); // No fuse score
+                            suggestion.matchScore = score;
 
-                    if (drug.brand_name) processApiDrug(drug.brand_name, 'Brand');
-                    if (drug.generic_name) processApiDrug(drug.generic_name, 'Generic');
-                });
-            }
-        } catch (error: any) {
-            if (error.name !== 'AbortError') {
-                console.warn("API Search failed", error);
+                            if (!combined.has(key)) {
+                                combined.set(key, suggestion);
+                            }
+                        };
+
+                        if (drug.brand_name) processApiDrug(drug.brand_name);
+                        if (drug.generic_name) processApiDrug(drug.generic_name);
+                    });
+                }
+            } catch (error: any) {
+                if (error.name !== 'AbortError') {
+                    console.warn("API Search failed", error);
+                }
             }
         }
 
         if (signal.aborted) return;
 
-        // 4. Filter, Sort and Slice
+        // 3. Filter, Sort and Slice
         // Remove already selected medications
-        medications.forEach(med => combined.delete(med.name.toLowerCase()));
+        // NOTE: We check against both the display name AND the generic name to avoid dupes
+        medications.forEach(med => {
+            const medName = med.name.toLowerCase();
+            // Remove from candidates if either the key (generic) or the display name matches
+            combined.delete(medName);
+            // Also filter by value if keys don't match (edge case)
+            for (const [key, val] of combined.entries()) {
+                if (val.name.toLowerCase() === medName) combined.delete(key);
+            }
+        });
 
         const sortedSuggestions = Array.from(combined.values())
             .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
@@ -550,7 +636,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     // Exact match check (Case-insensitive)
     if (medications.some(m => m.name.toLowerCase() === suggestion.name.toLowerCase())) {
         setDuplicateMedError(t.form_med_duplicate_error);
-        setSuggestions([]); // Clear suggestions to show error cleanly, or keep them? Clearing is standard.
+        setSuggestions([]); 
         return;
     }
     
@@ -595,8 +681,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     setMedications(medications.filter((_, i) => i !== index));
   };
   
-  const handleMedicationDetailChange = (index: number, field: 'dosage' | 'frequency' | 'potentialEffects' | 'recommendations' | 'references', value: string) => {
+  const handleMedicationDetailChange = (index: number, field: keyof Medication, value: string) => {
     const newMeds = [...medications];
+    // @ts-ignore
     newMeds[index] = { ...newMeds[index], [field]: value };
     setMedications(newMeds);
   };
@@ -725,86 +812,14 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         )}
         <div className="mt-3 space-y-3">
           {medications.map((med, index) => (
-            <div key={index} className="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-              <div className="flex justify-between items-start">
-                  <h4 className="font-semibold text-slate-800 dark:text-slate-200">{med.name}</h4>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMedication(index)}
-                    className="ml-2 -mt-1 -mr-1 flex-shrink-0 inline-flex items-center justify-center h-6 w-6 rounded-full text-red-500 hover:bg-red-200 dark:hover:bg-red-800 focus:outline-none focus:bg-red-500 focus:text-white transition-colors duration-200"
-                  >
-                    <span className="sr-only">{t.form_remove_med_sr.replace('{med}', med.name)}</span>
-                    <TrashIcon className="h-4 w-4" />
-                  </button>
-              </div>
-              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                  <div>
-                      <label htmlFor={`dosage-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_dosage_label}</label>
-                      <input
-                          id={`dosage-${index}`}
-                          type="text"
-                          value={med.dosage}
-                          onChange={(e) => handleMedicationDetailChange(index, 'dosage', e.target.value)}
-                          placeholder={t.form_dosage_placeholder}
-                          className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
-                      />
-                  </div>
-                  <div>
-                      <label htmlFor={`frequency-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_frequency_label}</label>
-                      <input
-                          id={`frequency-${index}`}
-                          type="text"
-                          value={med.frequency}
-                          onChange={(e) => handleMedicationDetailChange(index, 'frequency', e.target.value)}
-                          placeholder={t.form_frequency_placeholder}
-                          className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
-                      />
-                  </div>
-              </div>
-              <div className="mt-2 flex items-center">
-                  <button type="button" onClick={() => toggleAdvanced(index)} className="text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline focus:outline-none">
-                      {advancedVisible[index] ? t.form_hide_optional_details : t.form_add_optional_details}
-                  </button>
-                  <ProBadge />
-              </div>
-              {advancedVisible[index] && (
-                  <div className="mt-2 space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                      <div>
-                          <label htmlFor={`effects-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_effects_label}</label>
-                          <textarea
-                              id={`effects-${index}`}
-                              rows={2}
-                              value={med.potentialEffects || ''}
-                              onChange={(e) => handleMedicationDetailChange(index, 'potentialEffects', e.target.value)}
-                              placeholder={t.form_effects_placeholder}
-                              className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
-                          />
-                      </div>
-                      <div>
-                          <label htmlFor={`recommendations-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_recommendations_label}</label>
-                          <textarea
-                              id={`recommendations-${index}`}
-                              rows={2}
-                              value={med.recommendations || ''}
-                              onChange={(e) => handleMedicationDetailChange(index, 'recommendations', e.target.value)}
-                              placeholder={t.form_recommendations_placeholder}
-                              className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
-                          />
-                      </div>
-                      <div>
-                          <label htmlFor={`references-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">{t.form_references_label}</label>
-                          <input
-                              id={`references-${index}`}
-                              type="text"
-                              value={med.references || ''}
-                              onChange={(e) => handleMedicationDetailChange(index, 'references', e.target.value)}
-                              placeholder={t.form_references_placeholder}
-                              className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
-                          />
-                      </div>
-                  </div>
-              )}
-            </div>
+            <MedicationItem
+              key={`${med.name}-${index}`}
+              medication={med}
+              index={index}
+              onRemove={() => handleRemoveMedication(index)}
+              onChange={(field, value) => handleMedicationDetailChange(index, field, value)}
+              t={t}
+            />
           ))}
         </div>
       </div>

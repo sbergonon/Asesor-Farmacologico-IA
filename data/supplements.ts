@@ -1,3 +1,4 @@
+
 export interface SupplementInfo {
   name: string;
   type: 'Herbal' | 'Vitamin' | 'Mineral' | 'Amino Acid' | 'Other';
@@ -49,6 +50,7 @@ export const supplementDatabase: SupplementInfo[] = [
     { name: 'Licorice Root', type: 'Herbal' },
     { name: 'Hawthorn', type: 'Herbal' },
     { name: 'Green Tea Extract', type: 'Herbal' },
+    { name: 'Functional Mushrooms (Reishi, Cordyceps, Lion\'s Mane)', type: 'Herbal' },
     
     // Amino Acids
     { name: 'L-Arginine', type: 'Amino Acid' },
@@ -57,6 +59,7 @@ export const supplementDatabase: SupplementInfo[] = [
     { name: 'L-Tryptophan', type: 'Amino Acid' },
     { name: '5-HTP', type: 'Amino Acid' },
     { name: 'N-Acetylcysteine (NAC)', type: 'Amino Acid' },
+    { name: 'Collagen', type: 'Amino Acid' },
     
     // Other Common Supplements
     { name: 'Coenzyme Q10 (CoQ10)', type: 'Other' },

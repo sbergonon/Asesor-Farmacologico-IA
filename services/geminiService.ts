@@ -377,78 +377,90 @@ export const investigateSymptoms = async (
     // Choose prompt language based on user preference
     const prompt = lang === 'es' 
     ? `
-        Eres una IA de Investigación Clínica. Tu tarea es "Farmacología Inversa": determinar si los síntomas observados pueden explicarse por el régimen actual del paciente, condiciones o genética.
+        Eres una IA de Investigación Clínica especializada en Farmacovigilancia. Tu objetivo es realizar un análisis de causalidad para determinar si los síntomas reportados están relacionados con el régimen de medicación o el perfil clínico del paciente.
 
-        **Contexto del Paciente:**
-        - Síntomas/Signos Observados: "${symptoms}"
-        - Medicamentos: ${medStr}
-        - Condiciones: ${conditions}
-        - Edad/Fecha de Nacimiento: ${dateOfBirth}
-        - Farmacogenética: ${pharmacogenetics}
+        **Perfil del Paciente:**
+        - **Síntoma(s) Reportado(s):** "${symptoms}"
+        - **Medicamentos Actuales:** ${medStr}
+        - **Condiciones Médicas:** ${conditions}
+        - **Edad/Fecha de Nacimiento:** ${dateOfBirth}
+        - **Farmacogenética:** ${pharmacogenetics}
 
-        **Instrucciones:**
-        1. Analiza si el síntoma es un efecto secundario conocido de algún medicamento.
-        2. Analiza si el síntoma es resultado de una interacción fármaco-fármaco o fármaco-condición.
-        3. Considera efectos acumulativos (ej: carga anticolinérgica, prolongación QT).
-        4. Considera implicaciones farmacogenéticas si hay datos presentes.
+        **Protocolo de Investigación Exhaustiva:**
+        Analiza específicamente los siguientes puntos en relación con el síntoma reportado:
+        1.  **Efectos Secundarios Individuales:** Revisa el perfil de seguridad de cada fármaco. ¿Es el síntoma un efecto adverso documentado (común o raro) de alguno de ellos?
+        2.  **Interacciones Fármaco-Fármaco:** ¿Existe una interacción farmacocinética (ej: inhibición de CYP) que eleve niveles y cause toxicidad, o farmacodinámica (ej: efectos aditivos) que explique el síntoma?
+        3.  **Interacciones Fármaco-Condición:** ¿Algún medicamento está contraindicado para las condiciones del paciente, exacerbando el cuadro?
+        4.  **Implicaciones Farmacogenéticas:** Si hay datos genéticos (ej: metabolizador lento), ¿explica esto una acumulación tóxica o ineficacia relacionada con el síntoma?
+        5.  **Carga Acumulada:** Evalúa carga anticolinérgica, riesgo QT, o carga serotoninérgica si aplica.
 
-        **Formato de Salida:**
-        Proporciona primero un bloque JSON, luego una explicación en Markdown. El contenido debe estar estrictamente en ESPAÑOL.
+        **Formato de Salida Obligatorio:**
+        Debes devolver un bloque JSON estrictamente formateado, seguido de una explicación clínica.
 
         [INVESTIGATOR_START]
         {
             "matches": [
                 {
-                    "cause": "Nombre Específico del Fármaco o Interacción",
-                    "probability": "Alta/Media/Baja",
-                    "mechanism": "Breve explicación del mecanismo (ej: inhibición CYP, toxicidad aditiva)"
+                    "cause": "Especifica claramente: Nombre del Fármaco / Interacción A+B / Genotipo",
+                    "probability": "Alta / Media / Baja",
+                    "mechanism": "Explica EL MECANISMO específico (ej: 'Inhibición de CYP3A4 aumenta niveles de X', 'Efecto anticolinérgico directo', 'Reacción adversa tipo B')"
                 }
             ]
         }
         [INVESTIGATOR_END]
 
-        ### Análisis Clínico
-        (Proporciona una explicación detallada y profesional en formato Markdown en ESPAÑOL, citando mecanismos específicos y probabilidades).
-        
-        ### Fuentes
-        (Lista fuentes médicas relevantes si se encuentran mediante grounding).
+        ### Análisis Clínico Detallado
+        Proporciona un informe profesional en Markdown (en Español).
+        - **Efectos Secundarios Detectados:** Lista los fármacos sospechosos y la frecuencia del efecto adverso.
+        - **Análisis de Interacciones:** Detalla cualquier interacción relevante para el síntoma.
+        - **Factores de Riesgo:** Edad, genética o comorbilidades contribuyentes.
+        - **Conclusión:** Si es poco probable que el síntoma sea iatrogénico, indícalo claramente y sugiere causas alternativas relacionadas con la condición base.
+
+        ### Referencias
+        Lista fuentes médicas clave (guías, fichas técnicas) si se encuentran.
     ` 
     : `
-        You are a Clinical Investigator AI. Your task is "Reverse Pharmacology": determine if the observed symptoms can be explained by the patient's current regimen, conditions, or genetics.
+        You are a Clinical Investigator AI specializing in Pharmacovigilance. Your goal is to perform a causality analysis to determine if the reported symptoms are related to the medication regimen or the patient's clinical profile.
 
-        **Patient Context:**
-        - Observed Symptoms/Signs: "${symptoms}"
-        - Medications: ${medStr}
-        - Conditions: ${conditions}
-        - Age/DOB: ${dateOfBirth}
-        - Pharmacogenetics: ${pharmacogenetics}
+        **Patient Profile:**
+        - **Reported Symptom(s):** "${symptoms}"
+        - **Current Medications:** ${medStr}
+        - **Medical Conditions:** ${conditions}
+        - **Age/DOB:** ${dateOfBirth}
+        - **Pharmacogenetics:** ${pharmacogenetics}
 
-        **Instructions:**
-        1. Analyze if the symptom is a known side effect of any medication.
-        2. Analyze if the symptom is a result of a drug-drug or drug-condition interaction.
-        3. Consider cumulative effects (e.g. anticholinergic burden, QT prolongation).
-        4. Consider pharmacogenetic implications if data is present.
+        **Comprehensive Investigation Protocol:**
+        Specifically analyze the following points regarding the reported symptom:
+        1.  **Individual Side Effects:** Review the safety profile of each drug. Is the symptom a documented adverse effect (common or rare)?
+        2.  **Drug-Drug Interactions:** Is there a pharmacokinetic interaction (e.g., CYP inhibition) causing toxicity, or pharmacodynamic interaction (e.g., additive effects) explaining the symptom?
+        3.  **Drug-Condition Interactions:** Is any drug contraindicated for the patient's conditions, exacerbating the issue?
+        4.  **Pharmacogenetic Implications:** If genetic data exists (e.g., poor metabolizer), does it explain toxic accumulation or lack of efficacy related to the symptom?
+        5.  **Cumulative Burden:** Assess anticholinergic burden, QT risk, or serotonergic load if applicable.
 
-        **Output Format:**
-        Provide a JSON block first, then a Markdown explanation.
+        **Mandatory Output Format:**
+        You must return a strictly formatted JSON block, followed by a clinical explanation.
 
         [INVESTIGATOR_START]
         {
-            "matches": [
-                {
-                    "cause": "Specific Drug or Interaction Name",
-                    "probability": "High/Medium/Low",
-                    "mechanism": "Brief explanation of mechanism (e.g. CYP inhibition, additive toxicity)"
-                }
-            ]
+          "matches": [
+            {
+              "cause": "Clearly specify: Drug Name / Interaction A+B / Genotype",
+              "probability": "High / Medium / Low",
+              "mechanism": "Explain the specific MECHANISM (e.g., 'CYP3A4 inhibition increases levels of X', 'Direct anticholinergic effect', 'Type B adverse reaction')"
+            }
+          ]
         }
         [INVESTIGATOR_END]
 
-        ### Clinical Analysis
-        (Provide a detailed, professional markdown explanation here, citing specific mechanisms and likelihoods).
-        
-        ### Sources
-        (List relevant medical sources if found via grounding).
+        ### Detailed Clinical Analysis
+        Provide a professional report in Markdown.
+        - **Detected Side Effects:** List suspect drugs and the frequency of the adverse effect.
+        - **Interaction Analysis:** Detail any interactions relevant to the symptom.
+        - **Risk Factors:** Age, genetics, or contributing comorbidities.
+        - **Conclusion:** If the symptom is unlikely to be iatrogenic, state this clearly and suggest alternative causes related to the underlying condition.
+
+        ### References
+        List key medical sources (guidelines, labels) if found.
     `;
 
     const ai = new GoogleGenAI({ apiKey });
@@ -470,7 +482,11 @@ export const investigateSymptoms = async (
 
     if (jsonStart !== -1 && jsonEnd !== -1) {
         try {
-            const jsonStr = fullText.substring(jsonStart + '[INVESTIGATOR_START]'.length, jsonEnd).trim();
+            let jsonStr = fullText.substring(jsonStart + '[INVESTIGATOR_START]'.length, jsonEnd).trim();
+            // Handle markdown code blocks if the model adds them inside the markers. 
+            // Handles ```json, ```, and just ```
+            jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
+            
             const parsed = JSON.parse(jsonStr);
             matches = parsed.matches || [];
             analysisText = fullText.substring(jsonEnd + '[INVESTIGATOR_END]'.length).trim();

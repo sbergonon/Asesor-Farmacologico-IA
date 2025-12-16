@@ -78,6 +78,11 @@ const Login: React.FC<LoginProps> = ({ t }) => {
       setError(null);
       setSuccessMsg(null);
       
+      if (!isFirebaseConfigured) {
+          setError("Firebase no está configurado. Usa el Modo Demo.");
+          return;
+      }
+
       if (!email) {
           setError(t.login_email_label + " required.");
           return;
@@ -99,9 +104,26 @@ const Login: React.FC<LoginProps> = ({ t }) => {
           return;
       }
       
-      if (isRegistering && !name) {
-          setError("Please enter your name.");
-          return;
+      if (isRegistering) {
+          if (!name.trim()) {
+              setError(t.validation_name_required || "Name is required.");
+              return;
+          }
+          if (!institution.trim()) {
+              setError(t.validation_institution_required || "Institution is required.");
+              return;
+          }
+          if (password.length < 8) {
+              setError(t.validation_password_length || "Password must be at least 8 characters.");
+              return;
+          }
+          const hasUpperCase = /[A-Z]/.test(password);
+          const hasLowerCase = /[a-z]/.test(password);
+          const hasNumber = /[0-9]/.test(password);
+          if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+              setError(t.validation_password_complexity || "Password must include uppercase, lowercase, and a number.");
+              return;
+          }
       }
 
       try {
@@ -365,6 +387,7 @@ const Login: React.FC<LoginProps> = ({ t }) => {
                                 id="institution"
                                 value={institution}
                                 onChange={(e) => setInstitution(e.target.value)}
+                                required={isRegistering}
                                 className="mt-1 block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                             />
                         </div>

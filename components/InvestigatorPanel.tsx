@@ -291,7 +291,7 @@ const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, cond
                 <div className="flex flex-col sm:flex-row justify-end gap-3">
                     <button
                         onClick={handleShare}
-                        className="inline-flex items-center justify-center py-2 px-4 border border-blue-200 dark:border-blue-800 rounded-lg shadow-sm text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto"
+                        className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto"
                     >
                         <ShareIcon className="h-5 w-5 mr-2" />
                         Compartir / Email

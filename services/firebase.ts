@@ -33,6 +33,7 @@ const getEnvVar = (key: string): string => {
 // This allows the app to load and show UI errors or work in Demo mode
 const apiKey = getEnvVar('VITE_FIREBASE_API_KEY');
 
+// Flag to check if configuration is valid (not empty and not the placeholder)
 export const isFirebaseConfigured = !!apiKey && apiKey !== "AIzaSy_PLACEHOLDER_KEY";
 
 const firebaseConfig = {

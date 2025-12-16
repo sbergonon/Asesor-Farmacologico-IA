@@ -626,6 +626,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
                 <div className="prose prose-slate dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: formattedText(criticalSummary) }}></div>
             )}
 
+            {/* Sections Omitted for Brevity - they remain exactly as in the previous file version */}
             <Section title={t.section_drug_drug} count={filteredDrugDrug.length} sectionKey="drugDrug">
                 {filteredDrugDrug.map((item, index) => {
                     const itemId = `drugDrug-${index}`;
@@ -712,10 +713,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
                 })}
             </Section>
 
-            {/* Other Sections Omitted for Brevity in Code Update XML, assuming they remain identical but wrapped in same logic */}
-            {/* Note: In a real patch, I would include the full file or ensure the logic propagates. 
-                I will include the full render here to ensure safety. */}
-            
             <Section title={t.section_drug_substance} count={filteredDrugSubstance.length} sectionKey="drugSubstance">
                 {filteredDrugSubstance.map((item, index) => {
                     const itemId = `drugSubstance-${index}`;
@@ -1173,7 +1170,7 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
           <button
               type="button"
               onClick={handleShare}
-              className="inline-flex items-center justify-center py-3 px-4 border border-blue-200 dark:border-blue-800 rounded-lg shadow-sm text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto order-1 sm:order-none"
+              className="inline-flex items-center justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto order-1 sm:order-none"
           >
               <ShareIcon className="h-5 w-5 mr-2" />
               Compartir / Email
