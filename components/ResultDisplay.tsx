@@ -18,27 +18,17 @@ import DownloadIcon from './icons/DownloadIcon';
 import ChevronDownIcon from './icons/ChevronDownIcon';
 import ExportIcon from './icons/ExportIcon';
 import AlertTriangleIcon from './icons/AlertTriangleIcon';
-import CopyIcon from './icons/CopyIcon';
-import CheckCircleIcon from './icons/CheckCircleIcon';
 import SummaryPanel from './SummaryPanel';
-import AlertCircleIcon from './icons/AlertCircleIcon';
-import InfoCircleIcon from './icons/InfoCircleIcon';
 import RestrictedFeatureWrapper from './RestrictedFeatureWrapper';
 import ShareIcon from './icons/ShareIcon';
-
-// Inlined Icons to avoid creating new files
-const CogIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12a7.5 7.5 0 0015 0m-15 0a7.5 7.5 0 1115 0m-15 0H3m16.5 0H21m-1.5 0H12m-8.457 3.077l1.41-.513m14.095-5.13l-1.41-.513M5.106 17.785l1.15-.964m11.6-9.642l1.149-.964M12 4.5l.007.007m-.007 0l-.007.007m.007-.007l-.007-.007m.007.007l.007-.007m-7.007 7.007l-.007.007m.007 0l.007.007m-.007-.007l.007-.007m-.007.007l-.007-.007m7.007 7.007l.007.007m-.007 0l-.007.007m.007-.007l.007-.007m.007.007l-.007-.007" />
-  </svg>
-);
-
-const ArrowPathIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.667 0l3.181-3.183m-11.667-11.667l3.181 3.183m0 0h-4.992m4.992 0v-4.992" />
-  </svg>
-);
-
+import { 
+  DrugDrugList, 
+  DrugSubstanceList, 
+  DrugAllergyList, 
+  DrugConditionList, 
+  DrugPgxList, 
+  BeersCriteriaList 
+} from './InteractionSections';
 
 interface ResultDisplayProps {
   isLoading: boolean;
@@ -62,52 +52,6 @@ const LoadingSkeleton: React.FC = () => (
     </div>
 );
 
-const getRiskDetails = (riskLevel: string) => {
-  const lowerRisk = riskLevel.toLowerCase();
-  
-  if (lowerRisk.includes('crítico') || lowerRisk.includes('critical')) {
-    return {
-      Icon: AlertTriangleIcon,
-      badgeClasses: 'bg-red-700 text-white',
-    };
-  }
-  if (lowerRisk.includes('alto') || lowerRisk.includes('high')) {
-    return {
-      Icon: AlertTriangleIcon,
-      badgeClasses: 'bg-red-500 text-white',
-    };
-  }
-  if (lowerRisk.includes('moderado') || lowerRisk.includes('moderate')) {
-    return {
-      Icon: AlertCircleIcon,
-      badgeClasses: 'bg-amber-500 text-white',
-    };
-  }
-  if (lowerRisk.includes('bajo') || lowerRisk.includes('low')) {
-    return {
-      Icon: InfoCircleIcon,
-      badgeClasses: 'bg-sky-500 text-white',
-    };
-  }
-  // Default case
-  return {
-    Icon: InfoCircleIcon,
-    badgeClasses: 'bg-slate-400 dark:bg-slate-600 text-white',
-  };
-};
-
-const RiskBadge: React.FC<{ riskLevel: string }> = ({ riskLevel }) => {
-  const { Icon, badgeClasses } = getRiskDetails(riskLevel);
-
-  return (
-    <span className={`risk-badge flex-shrink-0 inline-flex items-center gap-x-1.5 px-2.5 py-1 text-xs font-semibold rounded-full ${badgeClasses}`}>
-      <Icon className="h-4 w-4" />
-      {riskLevel}
-    </span>
-  );
-};
-
-
 type HighRiskItem = {
     type: string;
     description: string;
@@ -118,7 +62,34 @@ interface SectionProps {
   count: number;
   sectionKey: string;
   children?: React.ReactNode;
+  expandedSections: Record<string, boolean>;
+  onToggle: (key: string) => void;
 }
+
+const Section: React.FC<SectionProps> = ({ title, count, sectionKey, children, expandedSections, onToggle }) => {
+  if (count === 0) return null;
+  return (
+      <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+          <button
+              onClick={() => onToggle(sectionKey)}
+              className="w-full flex justify-between items-center p-4 text-left bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors duration-200"
+              aria-expanded={expandedSections[sectionKey]}
+              aria-controls={`section-content-${sectionKey}`}
+          >
+              <div className="flex items-center">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{title}</h3>
+                  <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{count}</span>
+              </div>
+              <ChevronDownIcon className={`h-5 w-5 text-slate-500 dark:text-slate-400 flex-shrink-0 transform transition-transform duration-200 ${expandedSections[sectionKey] ? 'rotate-180' : ''}`} />
+          </button>
+          {expandedSections[sectionKey] && (
+              <div id={`section-content-${sectionKey}`} className="p-4 bg-white dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                  {children}
+              </div>
+          )}
+      </div>
+  );
+};
 
 const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult, t }) => {
   const { permissions } = useAuth();
@@ -129,7 +100,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  // CRITICAL FIX: useMemo MUST be called before any conditional return statements.
   const summaryCounts = useMemo(() => {
     if (!analysisResult) return {};
     const counts: Record<string, number> = {};
@@ -497,30 +467,6 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
   const filteredDrugPgx = filterByRisk<DrugPharmacogeneticContraindication>(analysisResult.drugPharmacogeneticContraindications);
   const filteredBeers = filterByRisk<BeersCriteriaAlert>(analysisResult.beersCriteriaAlerts);
 
-  const Section = ({ title, count, sectionKey, children }: SectionProps) => {
-    if (count === 0) return null;
-    return (
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button
-                onClick={() => handleToggleSection(sectionKey)}
-                className="w-full flex justify-between items-center p-4 text-left bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors duration-200"
-                aria-expanded={expandedSections[sectionKey]}
-                aria-controls={`section-content-${sectionKey}`}
-            >
-                <div className="flex items-center">
-                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200">{title}</h3>
-                    <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">{count}</span>
-                </div>
-                <ChevronDownIcon className={`h-5 w-5 text-slate-500 dark:text-slate-400 flex-shrink-0 transform transition-transform duration-200 ${expandedSections[sectionKey] ? 'rotate-180' : ''}`} />
-            </button>
-            {expandedSections[sectionKey] && (
-                <div id={`section-content-${sectionKey}`} className="p-4 bg-white dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 space-y-4">
-                    {children}
-                </div>
-            )}
-        </div>
-    );
-  };
   
   const getHighRiskItems = (): HighRiskItem[] => {
     if (!analysisResult) return [];
@@ -626,519 +572,33 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
                 <div className="prose prose-slate dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: formattedText(criticalSummary) }}></div>
             )}
 
-            {/* Sections Omitted for Brevity - they remain exactly as in the previous file version */}
-            <Section title={t.section_drug_drug} count={filteredDrugDrug.length} sectionKey="drugDrug">
-                {filteredDrugDrug.map((item, index) => {
-                    const itemId = `drugDrug-${index}`;
-                    const textToCopy = [
-                        `${t.results_interaction}: ${item.interaction}`,
-                        `${t.results_risk_level}: ${item.riskLevel}`,
-                        item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                        `${t.results_potential_effects}: ${item.potentialEffects}`,
-                        `${t.results_recommendations}: ${item.recommendations}`,
-                        item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                        item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                        item.references ? `${t.results_references}: ${item.references}` : ''
-                    ].filter(Boolean).join('\n');
-
-                    return (
-                        <div key={index} className="relative p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                                <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.interaction}</h4>
-                                <RiskBadge riskLevel={item.riskLevel} />
-                            </div>
-                            
-                            <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                {item.clinicalSummary && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                    </div>
-                                )}
-                                {item.potentialEffects && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_potential_effects}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.potentialEffects}</p>
-                                    </div>
-                                )}
-                                {item.recommendations && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                    </div>
-                                )}
-                                {(item.dosageAdjustment || item.therapeuticAlternative) && (
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg space-y-3">
-                                        {item.dosageAdjustment && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <CogIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_dosage_adjustment}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.dosageAdjustment}</p>
-                                            </div>
-                                        )}
-                                        {item.therapeuticAlternative && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <ArrowPathIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_therapeutic_alternative}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.therapeuticAlternative}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {item.references && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <button
-                                onClick={() => handleCopy(textToCopy, itemId)}
-                                className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                aria-label={t.copy_button_aria_label}
-                            >
-                                {copiedItemId === itemId ? (
-                                    <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                                ) : (
-                                    <CopyIcon className="h-5 w-5" />
-                                )}
-                            </button>
-                        </div>
-                    );
-                })}
+            <Section title={t.section_drug_drug} count={filteredDrugDrug.length} sectionKey="drugDrug" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <DrugDrugList items={filteredDrugDrug} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
 
-            <Section title={t.section_drug_substance} count={filteredDrugSubstance.length} sectionKey="drugSubstance">
-                {filteredDrugSubstance.map((item, index) => {
-                    const itemId = `drugSubstance-${index}`;
-                    const textToCopy = [
-                        `${t.results_interaction}: ${item.medication} + ${item.substance}`,
-                        `${t.results_risk_level}: ${item.riskLevel}`,
-                        item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                        `${t.results_potential_effects}: ${item.potentialEffects}`,
-                        `${t.results_recommendations}: ${item.recommendations}`,
-                        item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                        item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                        item.references ? `${t.results_references}: ${item.references}` : ''
-                    ].filter(Boolean).join('\n');
-
-                    return (
-                         <div key={index} className="relative p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                                <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.medication} + {item.substance}</h4>
-                                <RiskBadge riskLevel={item.riskLevel} />
-                            </div>
-                            
-                            <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                {item.clinicalSummary && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                    </div>
-                                )}
-                                {item.potentialEffects && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_potential_effects}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.potentialEffects}</p>
-                                    </div>
-                                )}
-                                {item.recommendations && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                    </div>
-                                )}
-                                {(item.dosageAdjustment || item.therapeuticAlternative) && (
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg space-y-3">
-                                        {item.dosageAdjustment && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <CogIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_dosage_adjustment}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.dosageAdjustment}</p>
-                                            </div>
-                                        )}
-                                        {item.therapeuticAlternative && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <ArrowPathIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_therapeutic_alternative}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.therapeuticAlternative}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {item.references && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <button
-                                onClick={() => handleCopy(textToCopy, itemId)}
-                                className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                aria-label={t.copy_button_aria_label}
-                            >
-                                {copiedItemId === itemId ? (
-                                    <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                                ) : (
-                                    <CopyIcon className="h-5 w-5" />
-                                )}
-                            </button>
-                        </div>
-                    );
-                })}
+            <Section title={t.section_drug_substance} count={filteredDrugSubstance.length} sectionKey="drugSubstance" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <DrugSubstanceList items={filteredDrugSubstance} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
 
-            <Section title={t.section_drug_allergy} count={filteredDrugAllergy.length} sectionKey="drugAllergy">
-                {filteredDrugAllergy.map((item, index) => {
-                    const itemId = `drugAllergy-${index}`;
-                    const textToCopy = [
-                        `${t.results_medication}: ${item.medication}`,
-                        `${t.results_allergen}: ${item.allergen}`,
-                        `${t.results_risk_level}: ${item.riskLevel}`,
-                        item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                        `${t.results_alert_details}: ${item.alertDetails}`,
-                        `${t.results_recommendations}: ${item.recommendations}`,
-                        item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                        item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                        item.references ? `${t.results_references}: ${item.references}` : ''
-                    ].filter(Boolean).join('\n');
-
-                    return (
-                        <div key={index} className="relative p-4 bg-red-50 dark:bg-red-900/30 rounded-lg border border-red-200 dark:border-red-700/50">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                                <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.medication}</h4>
-                                <RiskBadge riskLevel={item.riskLevel} />
-                            </div>
-                            <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">{t.results_allergen}: <span className="font-bold">{item.allergen}</span></p>
-                            
-                            <div className="space-y-4 pt-3 border-t border-red-200 dark:border-red-700">
-                                {item.clinicalSummary && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                    </div>
-                                )}
-                                {item.alertDetails && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_alert_details}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.alertDetails}</p>
-                                    </div>
-                                )}
-                                {item.recommendations && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                    </div>
-                                )}
-                                {/* Optional: Add adjustment/alternatives if provided */}
-                                {item.references && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <button
-                                onClick={() => handleCopy(textToCopy, itemId)}
-                                className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-red-100 dark:hover:bg-red-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                aria-label={t.copy_button_aria_label}
-                            >
-                                {copiedItemId === itemId ? (
-                                    <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                                ) : (
-                                    <CopyIcon className="h-5 w-5" />
-                                )}
-                            </button>
-                        </div>
-                    );
-                })}
+            <Section title={t.section_drug_allergy} count={filteredDrugAllergy.length} sectionKey="drugAllergy" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <DrugAllergyList items={filteredDrugAllergy} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
 
-
-            <Section title={t.section_drug_condition} count={filteredDrugCondition.length} sectionKey="drugCondition">
-                {filteredDrugCondition.map((item, index) => {
-                     const itemId = `drugCondition-${index}`;
-                     const textToCopy = [
-                         `${t.results_contraindication}: ${item.medication} with ${item.condition}`,
-                         `${t.results_risk_level}: ${item.riskLevel}`,
-                         item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                         `${t.results_details}: ${item.contraindicationDetails}`,
-                         `${t.results_recommendations}: ${item.recommendations}`,
-                         item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                         item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                         item.references ? `${t.results_references}: ${item.references}` : ''
-                     ].filter(Boolean).join('\n');
-
-                    return (
-                        <div key={index} className="relative p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                                <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.medication}</h4>
-                                <RiskBadge riskLevel={item.riskLevel} />
-                            </div>
-                             <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">Contraindicated with: <span className="font-bold">{item.condition}</span></p>
-
-                            <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                {item.clinicalSummary && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                    </div>
-                                )}
-                                {item.contraindicationDetails && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_details}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.contraindicationDetails}</p>
-                                    </div>
-                                )}
-                                {item.recommendations && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                        <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                    </div>
-                                )}
-                                {(item.dosageAdjustment || item.therapeuticAlternative) && (
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg space-y-3">
-                                        {item.dosageAdjustment && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <CogIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_dosage_adjustment}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.dosageAdjustment}</p>
-                                            </div>
-                                        )}
-                                        {item.therapeuticAlternative && (
-                                            <div>
-                                                <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                    <ArrowPathIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                    {t.results_therapeutic_alternative}
-                                                </h5>
-                                                <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.therapeuticAlternative}</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                                {item.references && (
-                                    <div>
-                                        <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                        <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                    </div>
-                                )}
-                            </div>
-                            
-                            <button
-                                onClick={() => handleCopy(textToCopy, itemId)}
-                                className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                                aria-label={t.copy_button_aria_label}
-                            >
-                                {copiedItemId === itemId ? (
-                                    <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                                ) : (
-                                    <CopyIcon className="h-5 w-5" />
-                                )}
-                            </button>
-                        </div>
-                    );
-                })}
+            <Section title={t.section_drug_condition} count={filteredDrugCondition.length} sectionKey="drugCondition" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <DrugConditionList items={filteredDrugCondition} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
             
-            <Section title={t.section_drug_pharmacogenetic} count={filteredDrugPgx.length} sectionKey="drugPharmacogenetic">
-                {filteredDrugPgx.map((item, index) => {
-                    const itemId = `drugPgx-${index}`;
-                    const textToCopy = [
-                        `${t.results_medication}: ${item.medication}`,
-                        `${t.results_genetic_factor}: ${item.geneticFactor}`,
-                        item.variantAllele ? `${t.results_genetic_variant}: ${item.variantAllele}`: '',
-                        `${t.results_risk_level}: ${item.riskLevel}`,
-                        item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                        `${t.results_implication}: ${item.implication}`,
-                        `${t.results_recommendations}: ${item.recommendations}`,
-                        item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                        item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                        item.references ? `${t.results_references}: ${item.references}` : ''
-                    ].filter(Boolean).join('\n');
-                    
-                    return (
-                     <div key={index} className="relative p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                            <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.medication}</h4>
-                            <RiskBadge riskLevel={item.riskLevel} />
-                        </div>
-                        <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-3">{t.results_genetic_factor}: <span className="font-bold">{item.geneticFactor} {item.variantAllele ? `(${item.variantAllele})` : ''}</span></p>
-
-                        <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                            {item.clinicalSummary && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                </div>
-                            )}
-                            {item.implication && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_implication}</h5>
-                                    <p className="text-sm text-slate-700 dark:text-slate-400">{item.implication}</p>
-                                </div>
-                            )}
-                            {item.recommendations && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                    <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                </div>
-                            )}
-                            {(item.dosageAdjustment || item.therapeuticAlternative) && (
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg space-y-3">
-                                    {item.dosageAdjustment && (
-                                        <div>
-                                            <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                <CogIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                {t.results_dosage_adjustment}
-                                            </h5>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.dosageAdjustment}</p>
-                                        </div>
-                                    )}
-                                    {item.therapeuticAlternative && (
-                                        <div>
-                                            <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                <ArrowPathIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                {t.results_therapeutic_alternative}
-                                            </h5>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.therapeuticAlternative}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            {item.references && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                    <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                </div>
-                            )}
-                        </div>
-                        
-                        <button
-                            onClick={() => handleCopy(textToCopy, itemId)}
-                            className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                            aria-label={t.copy_button_aria_label}
-                        >
-                            {copiedItemId === itemId ? (
-                                <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                            ) : (
-                                <CopyIcon className="h-5 w-5" />
-                            )}
-                        </button>
-                    </div>
-                    );
-                })}
+            <Section title={t.section_drug_pharmacogenetic} count={filteredDrugPgx.length} sectionKey="drugPharmacogenetic" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <DrugPgxList items={filteredDrugPgx} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
 
-            <Section title={t.section_beers_criteria} count={filteredBeers.length} sectionKey="beersCriteria">
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
-                    <h4 className="font-bold text-blue-800 dark:text-blue-300">{t.beers_criteria_explanation_title}</h4>
-                    <p className="mt-1 text-sm text-slate-700 dark:text-slate-300">
-                        {t.beers_criteria_explanation_text}
-                    </p>
-                </div>
-                {filteredBeers.map((item, index) => {
-                    const itemId = `beers-${index}`;
-                    const textToCopy = [
-                        `${t.results_medication}: ${item.medication}`,
-                        `${t.results_risk_level}: ${item.riskLevel}`,
-                        item.clinicalSummary ? `${t.results_clinical_summary}: ${item.clinicalSummary}` : '',
-                        `${t.results_criteria_reason}: ${item.criteria}`,
-                        `${t.results_recommendations}: ${item.recommendations}`,
-                        item.dosageAdjustment ? `${t.results_dosage_adjustment}: ${item.dosageAdjustment}`: '',
-                        item.therapeuticAlternative ? `${t.results_therapeutic_alternative}: ${item.therapeuticAlternative}`: '',
-                        item.references ? `${t.results_references}: ${item.references}` : ''
-                    ].filter(Boolean).join('\n');
-
-                    return (
-                     <div key={index} className="relative p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700/50">
-                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-3">
-                            <h4 className="text-md font-bold text-slate-800 dark:text-slate-100">{item.medication}</h4>
-                            <RiskBadge riskLevel={item.riskLevel} />
-                        </div>
-                        
-                        <div className="space-y-4 pt-3 border-t border-slate-200 dark:border-slate-700">
-                            {item.clinicalSummary && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_clinical_summary}</h5>
-                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">{item.clinicalSummary}</p>
-                                </div>
-                            )}
-                            {item.criteria && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_criteria_reason}</h5>
-                                    <p className="text-sm text-slate-700 dark:text-slate-400">{item.criteria}</p>
-                                </div>
-                            )}
-                            {item.recommendations && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_recommendations}</h5>
-                                    <p className="text-sm text-slate-700 dark:text-slate-400">{item.recommendations}</p>
-                                </div>
-                            )}
-                             {(item.dosageAdjustment || item.therapeuticAlternative) && (
-                                <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg space-y-3">
-                                    {item.dosageAdjustment && (
-                                        <div>
-                                            <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                <CogIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                {t.results_dosage_adjustment}
-                                            </h5>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.dosageAdjustment}</p>
-                                        </div>
-                                    )}
-                                    {item.therapeuticAlternative && (
-                                        <div>
-                                            <h5 className="flex items-center text-sm font-semibold text-blue-800 dark:text-blue-200 mb-1">
-                                                <ArrowPathIcon className="h-4 w-4 mr-1.5 flex-shrink-0" />
-                                                {t.results_therapeutic_alternative}
-                                            </h5>
-                                            <p className="text-sm text-slate-700 dark:text-slate-300 pl-5">{item.therapeuticAlternative}</p>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            {item.references && (
-                                <div>
-                                    <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-1">{t.results_references}</h5>
-                                    <p className="text-xs text-slate-500 dark:text-slate-500 break-all">{item.references}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        <button
-                            onClick={() => handleCopy(textToCopy, itemId)}
-                            className="absolute top-2 right-2 p-1.5 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
-                            aria-label={t.copy_button_aria_label}
-                        >
-                            {copiedItemId === itemId ? (
-                                <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                            ) : (
-                                <CopyIcon className="h-5 w-5" />
-                            )}
-                        </button>
-                    </div>
-                    );
-                })}
+            <Section title={t.section_beers_criteria} count={filteredBeers.length} sectionKey="beersCriteria" expandedSections={expandedSections} onToggle={handleToggleSection}>
+                <BeersCriteriaList items={filteredBeers} t={t} onCopy={handleCopy} copiedId={copiedItemId} />
             </Section>
-
 
             {analysisResult.sources.length > 0 && !activeFilter && (
                 <div className="pt-6">
-                    <Section title={t.section_sources} count={analysisResult.sources.length} sectionKey="sources">
+                    <Section title={t.section_sources} count={analysisResult.sources.length} sectionKey="sources" expandedSections={expandedSections} onToggle={handleToggleSection}>
                         <ul className="space-y-3">
                             {analysisResult.sources.map((source, index) => (
                                 <li key={index} className="border-b border-slate-200 dark:border-slate-700 last:border-b-0 pb-3">

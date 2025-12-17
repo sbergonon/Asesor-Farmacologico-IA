@@ -79,20 +79,41 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const dashboardRef = useRef<HTMLDivElement>(null);
 
-  // --- Logic for Analysis View (Existing logic) ---
+  // Helper to extract unique patients based on latest history item per Patient ID
+  const uniquePatientItems = useMemo(() => {
+      if (!history || history.length === 0) return [];
+      const uniquePatientsMap = new Map<string, HistoryItem>();
+      // Sort by date desc (newest first) to keep the latest snapshot
+      const sortedHistory = [...history].sort((a, b) => new Date(b.id).getTime() - new Date(a.id).getTime());
+      
+      sortedHistory.forEach(item => {
+          if (item.patientId && !uniquePatientsMap.has(item.patientId)) {
+              uniquePatientsMap.set(item.patientId, item);
+          } else if (!item.patientId) {
+              // Items without ID (adhoc) are treated as unique instances for analysis stats
+              // but we generate a temp ID to include them in general stats
+              uniquePatientsMap.set(`adhoc-${item.id}`, item);
+          }
+      });
+      return Array.from(uniquePatientsMap.values());
+  }, [history]);
+
+  // --- Logic for Analysis View (Refactored to Patient-Centric Counts) ---
   const analysisStats = useMemo(() => {
-    if (!history || history.length === 0) return null;
+    if (uniquePatientItems.length === 0) return null;
     
-    let totalFindings = 0;
+    // Aggregates for unique patients
+    const patientRiskCounts: Record<string, number> = {};
+    const patientMedicationCounts: Record<string, number> = {};
+    const patientInteractionTypeCounts: Record<string, number> = {};
+    const patientSpecificInteractionCounts: Record<string, number> = {};
+    
+    let totalFindings = 0; // Still keep total absolute findings for overview
     let highRiskFindings = 0;
-    const riskLevelCounts: Record<string, number> = {};
-    const medicationFrequency: Record<string, number> = {};
-    const interactionTypeCounts: Record<string, number> = {};
-    const specificInteractionCounts: Record<string, number> = {};
     
     const highRiskTerms = ['alto', 'high', 'crítico', 'critical'];
 
-    history.forEach(item => {
+    uniquePatientItems.forEach(item => {
         const allFindings: AnyInteraction[] = [
             ...(item.analysisResult.drugDrugInteractions || []),
             ...(item.analysisResult.drugSubstanceInteractions || []),
@@ -104,45 +125,59 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
         
         totalFindings += allFindings.length;
         
-        allFindings.forEach(finding => {
-            // Risk level count
-            const risk = finding.riskLevel || 'Unknown';
-            riskLevelCounts[risk] = (riskLevelCounts[risk] || 0) + 1;
-            
-            // Interaction type count
-            if ('interaction' in finding) interactionTypeCounts[t.interaction_drug_drug] = (interactionTypeCounts[t.interaction_drug_drug] || 0) + 1;
-            else if ('substance' in finding) interactionTypeCounts[t.interaction_drug_substance] = (interactionTypeCounts[t.interaction_drug_substance] || 0) + 1;
-            else if ('allergen' in finding) interactionTypeCounts[t.alert_allergy] = (interactionTypeCounts[t.alert_allergy] || 0) + 1;
-            else if ('condition' in finding) interactionTypeCounts[t.contraindication_condition] = (interactionTypeCounts[t.contraindication_condition] || 0) + 1;
-            else if ('geneticFactor' in finding) interactionTypeCounts[t.contraindication_pharmacogenetic] = (interactionTypeCounts[t.contraindication_pharmacogenetic] || 0) + 1;
-            else if ('criteria' in finding) interactionTypeCounts[t.alert_beers_criteria] = (interactionTypeCounts[t.alert_beers_criteria] || 0) + 1;
+        // Sets to track if THIS patient has already been counted for a specific metric
+        const patientRisksFound = new Set<string>();
+        const patientMedsFound = new Set<string>();
+        const patientTypesFound = new Set<string>();
+        const patientInteractionsFound = new Set<string>();
 
-            // Specific Critical/High interaction tracking
+        allFindings.forEach(finding => {
+            const risk = finding.riskLevel || 'Unknown';
+            patientRisksFound.add(risk);
+
+            // Interaction type
+            if ('interaction' in finding) patientTypesFound.add(t.interaction_drug_drug);
+            else if ('substance' in finding) patientTypesFound.add(t.interaction_drug_substance);
+            else if ('allergen' in finding) patientTypesFound.add(t.alert_allergy);
+            else if ('condition' in finding) patientTypesFound.add(t.contraindication_condition);
+            else if ('geneticFactor' in finding) patientTypesFound.add(t.contraindication_pharmacogenetic);
+            else if ('criteria' in finding) patientTypesFound.add(t.alert_beers_criteria);
+
+            // Specific High Risk Interactions (for table)
             if (highRiskTerms.some(term => risk.toLowerCase().includes(term))) {
-                highRiskFindings++;
-                
+                highRiskFindings++; // Total count
                 let interactionName = '';
-                if ('interaction' in finding) interactionName = finding.interaction; // DDI
-                else if ('substance' in finding) interactionName = `${finding.medication} + ${finding.substance}`; // DSI
-                else if ('allergen' in finding) interactionName = `${finding.medication} (Allergy: ${finding.allergen})`; // Allergy
-                else if ('condition' in finding) interactionName = `${finding.medication} + ${finding.condition}`; // Condition
+                if ('interaction' in finding) interactionName = finding.interaction;
+                else if ('substance' in finding) interactionName = `${finding.medication} + ${finding.substance}`;
+                else if ('allergen' in finding) interactionName = `${finding.medication} (Allergy: ${finding.allergen})`;
+                else if ('condition' in finding) interactionName = `${finding.medication} + ${finding.condition}`;
                 
                 if (interactionName) {
-                    specificInteractionCounts[interactionName] = (specificInteractionCounts[interactionName] || 0) + 1;
+                    patientInteractionsFound.add(interactionName);
                 }
             }
-            
-            // Medication frequency count
+
+            // Medication involved
             if ('medication' in finding) {
-                const med = finding.medication;
-                medicationFrequency[med] = (medicationFrequency[med] || 0) + 1;
+                patientMedsFound.add(finding.medication);
             } else if ('interaction' in finding) {
                 const meds = finding.interaction.split(' + ');
-                meds.forEach(med => {
-                    const cleanMed = med.trim();
-                    medicationFrequency[cleanMed] = (medicationFrequency[cleanMed] || 0) + 1;
-                });
+                meds.forEach(m => patientMedsFound.add(m.trim()));
             }
+        });
+
+        // Apply sets to global counts
+        patientRisksFound.forEach(risk => {
+            patientRiskCounts[risk] = (patientRiskCounts[risk] || 0) + 1;
+        });
+        patientMedsFound.forEach(med => {
+            patientMedicationCounts[med] = (patientMedicationCounts[med] || 0) + 1;
+        });
+        patientTypesFound.forEach(type => {
+            patientInteractionTypeCounts[type] = (patientInteractionTypeCounts[type] || 0) + 1;
+        });
+        patientInteractionsFound.forEach(interaction => {
+            patientSpecificInteractionCounts[interaction] = (patientSpecificInteractionCounts[interaction] || 0) + 1;
         });
     });
 
@@ -150,38 +185,24 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
         totalAnalyses: history.length,
         totalFindings,
         highRiskFindings,
-        riskDistribution: Object.entries(riskLevelCounts).map(([label, value]) => ({ label, value })),
-        topMedications: Object.entries(medicationFrequency).sort(([, a], [, b]) => b - a).slice(0, 5).map(([label, value]) => ({ label, value })),
-        topInteractionTypes: Object.entries(interactionTypeCounts).sort(([, a], [, b]) => b - a).map(([label, value]) => ({ label, value })),
-        topSpecificInteractions: Object.entries(specificInteractionCounts).sort(([, a], [, b]) => b - a).slice(0, 8).map(([label, value]) => ({ label, value })),
+        riskDistribution: Object.entries(patientRiskCounts).map(([label, value]) => ({ label, value })),
+        topMedications: Object.entries(patientMedicationCounts).sort(([, a], [, b]) => b - a).slice(0, 5).map(([label, value]) => ({ label, value })),
+        topInteractionTypes: Object.entries(patientInteractionTypeCounts).sort(([, a], [, b]) => b - a).map(([label, value]) => ({ label, value })),
+        topSpecificInteractions: Object.entries(patientSpecificInteractionCounts).sort(([, a], [, b]) => b - a).slice(0, 8).map(([label, value]) => ({ label, value })),
     };
-  }, [history, t]);
+  }, [history, uniquePatientItems, t]);
 
-  // --- Logic for Patient View (New logic) ---
+  // --- Logic for Patient View ---
   const patientStats = useMemo(() => {
-      if (!history || history.length === 0) return null;
+      if (uniquePatientItems.length === 0) return null;
 
-      // Group by Patient ID (filter out null IDs), keep only the LATEST analysis for each
-      const uniquePatientsMap = new Map<string, HistoryItem>();
-      
-      // History is often sorted newest first, but let's be safe and sort by date
-      const sortedHistory = [...history].sort((a, b) => new Date(b.id).getTime() - new Date(a.id).getTime());
-
-      sortedHistory.forEach(item => {
-          if (item.patientId && !uniquePatientsMap.has(item.patientId)) {
-              uniquePatientsMap.set(item.patientId, item);
-          }
-      });
-
-      const uniquePatients = Array.from(uniquePatientsMap.values());
-      const totalUniquePatients = uniquePatients.length;
-      
+      const totalUniquePatients = uniquePatientItems.length;
       let patientsWithRisk = 0;
       let totalMeds = 0;
       const conditionsFrequency: Record<string, number> = {};
       const highRiskTerms = ['alto', 'high', 'crítico', 'critical'];
 
-      uniquePatients.forEach(item => {
+      uniquePatientItems.forEach(item => {
           totalMeds += item.medications.length;
 
           // Conditions count
@@ -190,7 +211,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
               conditionsFrequency[c] = (conditionsFrequency[c] || 0) + 1;
           });
 
-          // Check if this patient has ANY high risk finding in their latest snapshot
+          // Check if this patient has ANY high risk finding
           const allFindings: AnyInteraction[] = [
             ...(item.analysisResult.drugDrugInteractions || []),
             ...(item.analysisResult.drugSubstanceInteractions || []),
@@ -213,7 +234,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
           topConditions: Object.entries(conditionsFrequency).sort(([, a], [, b]) => b - a).slice(0, 5).map(([label, value]) => ({ label, value })),
       };
 
-  }, [history]);
+  }, [uniquePatientItems]);
 
   // --- Export Handlers ---
 
@@ -260,13 +281,13 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
           csvContent += `${t.dashboard_total_analyses},${analysisStats.totalAnalyses}\n`;
           csvContent += `${t.dashboard_total_findings},${analysisStats.totalFindings}\n`;
           csvContent += `${t.dashboard_high_risk_findings},${analysisStats.highRiskFindings}\n`;
-          csvContent += "\nRisk Distribution\nRisk Level,Count\n";
+          csvContent += "\nRisk Distribution (Patients affected)\nRisk Level,Count\n";
           analysisStats.riskDistribution.forEach(row => csvContent += `${row.label},${row.value}\n`);
-          csvContent += "\nTop Medications\nMedication,Count\n";
+          csvContent += "\nTop Medications (Patients affected)\nMedication,Count\n";
           analysisStats.topMedications.forEach(row => csvContent += `${row.label},${row.value}\n`);
-          csvContent += "\nFinding Types\nType,Count\n";
+          csvContent += "\nFinding Types (Patients affected)\nType,Count\n";
           analysisStats.topInteractionTypes.forEach(row => csvContent += `${row.label},${row.value}\n`);
-          csvContent += "\nSpecific High Risk Interactions\nInteraction,Count\n";
+          csvContent += "\nSpecific High Risk Interactions (Patients affected)\nInteraction,Count\n";
           analysisStats.topSpecificInteractions.forEach(row => csvContent += `"${row.label}",${row.value}\n`);
       } else if (subTab === 'patients' && patientStats) {
           csvContent += "Metric,Value\n";
@@ -357,7 +378,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
                     </div>
                 </div>
 
-                {/* NEW: Specific Critical Interactions Table */}
+                {/* Specific Critical Interactions Table */}
                 {analysisStats.topSpecificInteractions.length > 0 && (
                     <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
                         <h3 className="text-md font-semibold text-red-800 dark:text-red-200 mb-4 flex items-center">
@@ -369,7 +390,7 @@ const DashboardPanel: React.FC<DashboardPanelProps> = ({ history, t }) => {
                                 <thead className="bg-red-50 dark:bg-red-900/20">
                                     <tr>
                                         <th className="px-4 py-2 text-left text-red-900 dark:text-red-100">{t.results_interaction} / {t.results_contraindication}</th>
-                                        <th className="px-4 py-2 text-right text-red-900 dark:text-red-100">Frecuencia</th>
+                                        <th className="px-4 py-2 text-right text-red-900 dark:text-red-100">Pacientes Afectados</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-red-100 dark:divide-slate-700">

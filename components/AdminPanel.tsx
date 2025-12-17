@@ -37,7 +37,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
   
   // Settings State
   const [settings, setSettings] = useState<SystemSettings>({
-    prioritySources: 'nih.gov, mayoclinic.org, drugs.com',
+    prioritySources: 'nih.gov, mayoclinic.org, drugs.com, medscape.com',
     excludedSources: 'wikipedia.org, social media',
     safetyStrictness: 'standard',
   });

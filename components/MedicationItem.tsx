@@ -44,11 +44,17 @@ const MedicationItem: React.FC<MedicationItemProps> = ({
           <input
             id={`dosage-${index}`}
             type="text"
+            list={`dosage-options-${index}`}
             value={medication.dosage}
             onChange={(e) => onChange('dosage', e.target.value)}
             placeholder={t.form_dosage_placeholder}
             className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
           />
+          <datalist id={`dosage-options-${index}`}>
+              {t.medication_dosages && t.medication_dosages.map((dose: string) => (
+                  <option key={dose} value={dose} />
+              ))}
+          </datalist>
         </div>
         <div>
           <label htmlFor={`frequency-${index}`} className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
@@ -57,11 +63,17 @@ const MedicationItem: React.FC<MedicationItemProps> = ({
           <input
             id={`frequency-${index}`}
             type="text"
+            list={`frequency-options-${index}`}
             value={medication.frequency}
             onChange={(e) => onChange('frequency', e.target.value)}
             placeholder={t.form_frequency_placeholder}
             className="block w-full px-2 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm placeholder-slate-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition duration-200"
           />
+          <datalist id={`frequency-options-${index}`}>
+              {t.medication_frequencies && t.medication_frequencies.map((freq: string) => (
+                  <option key={freq} value={freq} />
+              ))}
+          </datalist>
         </div>
       </div>
 

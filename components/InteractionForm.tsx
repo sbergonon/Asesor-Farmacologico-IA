@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
@@ -640,10 +641,18 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         return;
     }
     
+    // Only auto-fill frequency if it's localized or generic enough. 
+    // If the app is in Spanish but the database freq is English (e.g. "once daily"), skip it 
+    // to encourage the user to use the localized datalist.
+    let autoFreq = suggestion.commonFrequency || '';
+    if (t.lang_code === 'es' && autoFreq.includes('daily')) {
+        autoFreq = ''; // Clear if likely English in Spanish mode
+    }
+
     setMedications([...medications, {
         name: suggestion.name,
         dosage: suggestion.commonDosage || '',
-        frequency: suggestion.commonFrequency || '',
+        frequency: autoFreq,
         potentialEffects: '',
         recommendations: '',
         references: '',
