@@ -48,5 +48,37 @@ export const criticalDrugInteractionRules: { pair: string[], reasonKey: string }
   {
     pair: ['warfarin', 'sulfamethoxazole/trimethoprim'],
     reasonKey: 'reason_warfarin_bactrim'
+  },
+  {
+      pair: ['fluoxetine', 'phenelzine'],
+      reasonKey: 'reason_serotonin_syndrome'
+  },
+  {
+      pair: ['sertraline', 'phenelzine'],
+      reasonKey: 'reason_serotonin_syndrome'
+  },
+  {
+      pair: ['amiodarone', 'warfarin'],
+      reasonKey: 'reason_bleeding_risk_amiodarone'
+  },
+  {
+      pair: ['spironolactone', 'lisinopril'],
+      reasonKey: 'reason_hyperkalemia_risk'
+  },
+  {
+      pair: ['spironolactone', 'enalapril'],
+      reasonKey: 'reason_hyperkalemia_risk'
+  },
+  {
+      pair: ['digoxin', 'amiodarone'],
+      reasonKey: 'reason_digoxin_toxicity'
+  },
+  {
+      pair: ['methotrexate', 'ibuprofen'],
+      reasonKey: 'reason_methotrexate_toxicity'
+  },
+  {
+      pair: ['methotrexate', 'naproxen'],
+      reasonKey: 'reason_methotrexate_toxicity'
   }
 ];
