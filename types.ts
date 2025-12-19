@@ -139,6 +139,18 @@ export interface HistoryItem {
   patientId?: string; // Optional patient ID for batch analysis
 }
 
+export interface InvestigatorHistoryItem {
+  id: string;
+  timestamp: string;
+  symptoms: string;
+  medications: Medication[];
+  conditions: string;
+  dateOfBirth: string;
+  pharmacogenetics: string;
+  result: InvestigatorResult;
+  patientId?: string;
+}
+
 export interface PatientProfile {
   id: string; // Corresponds to patientId
   medications: Medication[];
@@ -159,6 +171,15 @@ export interface BatchPatientData {
   other_substances: string;
   pharmacogenetics: string;
   conditions: string;
+}
+
+export interface BatchInvestigatorData {
+  patient_id: string;
+  symptoms: string;
+  medications: string;
+  date_of_birth: string;
+  conditions: string;
+  pharmacogenetics: string;
 }
 
 export interface ProactiveAlert {
