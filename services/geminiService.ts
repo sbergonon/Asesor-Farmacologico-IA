@@ -15,35 +15,13 @@ import type {
     SystemSettings,
     InvestigatorResult
 } from '../types';
-import { ApiKeyError } from '../types';
 import { translations } from '../lib/translations';
 
-// Helper to safely get the API key from various environments (Node/Vite)
-const getApiKey = (): string | undefined => {
-  try {
-    // Priority 1: process.env.API_KEY (Standard/System Prompt)
-    if (typeof process !== 'undefined' && process.env?.API_KEY) {
-      return process.env.API_KEY;
-    }
-    // Priority 2: import.meta.env.VITE_GEMINI_API_KEY (Vite Standard)
-    // @ts-ignore - Handle Vite types if not explicitly defined
-    if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_GEMINI_API_KEY) {
-      // @ts-ignore
-      return import.meta.env.VITE_GEMINI_API_KEY;
-    }
-  } catch (e) {
-    console.warn("Error accessing environment variables", e);
-  }
-  return undefined;
-};
-
-// Retrieve admin settings (Mocked via localStorage for now as Firestore sync requires more logic)
 const getSystemConfig = (): SystemSettings => {
     try {
         const stored = localStorage.getItem('system_config');
         if (stored) return JSON.parse(stored);
     } catch(e) {}
-    // Default config
     return { prioritySources: '', excludedSources: '', safetyStrictness: 'standard' };
 };
 
@@ -77,7 +55,6 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
   const conditionsText = conditions.trim() ? `${t.prompt.preexistingConditions}: ${conditions}. ${t.prompt.conditionsNote}` : t.prompt.noPreexistingConditions;
   const dobText = dateOfBirth.trim() ? `${t.prompt.dob}: ${dateOfBirth}. ${t.prompt.dobNote}` : t.prompt.noDob;
 
-  // Admin Configuration Injections
   let sourceInstruction = "";
   if (config.prioritySources) {
       sourceInstruction += `\n- **PRIORITY SOURCES:** Prioritize information from these domains: ${config.prioritySources}.`;
@@ -226,14 +203,10 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   
   try {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      throw new ApiKeyError(t.error_api_key_invalid);
-    }
-    const ai = new GoogleGenAI({ apiKey });
+    // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
-    // SANITIZED SYSTEM INSTRUCTION:
     const systemInstruction = `You are a Clinical Pharmacology Database and Decision Support Engine. Your function is to process the input list of pharmaceutical compounds and clinical conditions to output a raw, objective, technical report on drug interactions, pharmacokinetics, and contraindications based on established medical guidelines (FDA, EMA). Use strict medical terminology.`;
 
     const response = await ai.models.generateContent({
@@ -345,7 +318,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
     
     if (error instanceof Error) {
       if (error.message.includes('API key not valid') || error.message.includes('API key is invalid')) {
-        throw new ApiKeyError(t.error_api_key_invalid);
+        throw new Error(t.error_api_key_invalid);
       }
       if (error.message.includes(t.error_safety_block_check)) {
         throw error;
@@ -360,6 +333,34 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   }
 };
 
+export const getDetailedInteractionInfo = async (findingTitle: string, medications: Medication[], conditions: string, lang: 'es' | 'en'): Promise<string> => {
+    const t = translations[lang];
+
+    const medStr = medications.map(m => m.name).join(', ');
+    const prompt = lang === 'es' 
+        ? `Explica detalladamente la siguiente alerta médica: "${findingTitle}". 
+           Contexto del paciente: Medicamentos actual: [${medStr}], Condiciones: [${conditions}].
+           Proporciona una explicación técnica pero clara sobre el mecanismo fisiopatológico (ej: inducción/inhibición enzimática, efectos aditivos, antagonismo).
+           Responde en Español, usando formato Markdown técnico.`
+        : `Explain in detail the following medical alert: "${findingTitle}".
+           Patient context: Current medications: [${medStr}], Conditions: [${conditions}].
+           Provide a technical but clear explanation of the pathophysiological mechanism (e.g., enzymatic induction/inhibition, additive effects, antagonism).
+           Respond in English using technical Markdown format.`;
+
+    // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview", 
+        contents: prompt,
+        config: {
+            systemInstruction: "You are a senior clinical pharmacist explaining mechanisms to a fellow clinician. Be concise, precise, and objective.",
+            safetySettings: [{ category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }]
+        }
+    });
+
+    return response.text || "No se pudo generar la explicación.";
+};
+
 export const investigateSymptoms = async (
     symptoms: string, 
     medications: Medication[], 
@@ -369,12 +370,9 @@ export const investigateSymptoms = async (
     lang: 'es' | 'en'
 ): Promise<InvestigatorResult> => {
     const t = translations[lang];
-    const apiKey = getApiKey();
-    if (!apiKey) throw new ApiKeyError(t.error_api_key_invalid);
 
     const medStr = medications.map(m => `${m.name} (${m.dosage})`).join(', ');
     
-    // Choose prompt language based on user preference
     const prompt = lang === 'es' 
     ? `
         Eres una IA de Investigación Clínica especializada en Farmacovigilancia. Tu objetivo es realizar un análisis de causalidad para determinar si los síntomas reportados están relacionados con el régimen de medicación o el perfil clínico del paciente.
@@ -463,9 +461,10 @@ export const investigateSymptoms = async (
         List key medical sources (guidelines, labels) if found.
     `;
 
-    const ai = new GoogleGenAI({ apiKey });
+    // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview", // Use Pro for complex reasoning
+        model: "gemini-3-pro-preview", 
         contents: prompt,
         config: {
             tools: [{ googleSearch: {} }],
@@ -483,8 +482,6 @@ export const investigateSymptoms = async (
     if (jsonStart !== -1 && jsonEnd !== -1) {
         try {
             let jsonStr = fullText.substring(jsonStart + '[INVESTIGATOR_START]'.length, jsonEnd).trim();
-            // Handle markdown code blocks if the model adds them inside the markers. 
-            // Handles ```json, ```, and just ```
             jsonStr = jsonStr.replace(/^```(?:json)?\s*/, '').replace(/```$/, '').trim();
             
             const parsed = JSON.parse(jsonStr);
@@ -513,13 +510,10 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     .replace('{medicationList}', medicationList);
 
   try {
-    const apiKey = getApiKey();
-    if (!apiKey) {
-      throw new ApiKeyError(t.error_api_key_invalid);
-    }
-    const ai = new GoogleGenAI({ apiKey });
+    // Always use const ai = new GoogleGenAI({apiKey: process.env.API_KEY});
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
         safetySettings: [
@@ -545,7 +539,6 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
         try {
           return JSON.parse(jsonMatch[1]) as SupplementInteraction[];
         } catch (e2) {
-          // Fall through
         }
       }
       throw new Error(t.error_supplement_parsing);
@@ -554,7 +547,7 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     console.error(`Failed to analyze supplement ${supplementName}:`, error);
     if (error instanceof Error) {
         if (error.message.includes('API key not valid') || error.message.includes('API key is invalid')) {
-            throw new ApiKeyError(t.error_api_key_invalid);
+            throw new Error(t.error_api_key_invalid);
         }
         if (error.message.includes(t.error_safety_block_check) || error.message.includes(t.error_no_response_check)) {
           throw error;

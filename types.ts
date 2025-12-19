@@ -1,4 +1,21 @@
 
+export interface ExternalIntegration {
+  id: string;
+  name: string;
+  type: 'EHR' | 'eCRF' | 'Pharmacovigilance';
+  protocol: 'FHIR' | 'REST' | 'Webhook';
+  endpoint: string;
+  status: 'active' | 'inactive';
+  lastSync?: string;
+}
+
+export interface SystemSettings {
+  prioritySources: string; 
+  excludedSources: string; 
+  safetyStrictness: 'standard' | 'strict' | 'loose';
+  integrations?: ExternalIntegration[]; // Nueva propiedad
+}
+
 export interface GroundingChunk {
   web?: {
     uri?: string;
@@ -219,10 +236,4 @@ export interface UserProfile {
   role: UserRole;
   institution?: string; // Optional institution field
   createdAt: string;
-}
-
-export interface SystemSettings {
-  prioritySources: string; // Comma separated list of domains
-  excludedSources: string; // Comma separated list of domains
-  safetyStrictness: 'standard' | 'strict' | 'loose';
 }
