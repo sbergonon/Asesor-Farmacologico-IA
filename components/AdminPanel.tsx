@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import type { SystemSettings, UserProfile, UserRole } from '../types';
 import SaveIcon from './icons/SaveIcon';
@@ -294,12 +293,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/50">
-                            <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-2 uppercase tracking-wide">{t[`admin_connectivity_docs_step${i}`]}</h4>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t[`admin_connectivity_docs_step${i}_desc`]}</p>
-                        </div>
-                      ))}
+                      <div className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/50">
+                          <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-2 uppercase tracking-wide">{t.admin_connectivity_docs_step1}</h4>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t.admin_connectivity_docs_step1_desc}</p>
+                      </div>
+                      <div className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/50">
+                          <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-2 uppercase tracking-wide">{t.admin_connectivity_docs_step2}</h4>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t.admin_connectivity_docs_step2_desc}</p>
+                      </div>
+                      <div className="bg-white dark:bg-slate-800/50 p-4 rounded-lg shadow-sm border border-indigo-100 dark:border-indigo-900/50">
+                          <h4 className="text-xs font-bold text-indigo-800 dark:text-indigo-300 mb-2 uppercase tracking-wide">{t.admin_connectivity_docs_step3}</h4>
+                          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{t.admin_connectivity_docs_step3_desc}</p>
+                      </div>
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-indigo-100 dark:border-indigo-800">

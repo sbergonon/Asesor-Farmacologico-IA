@@ -1,9 +1,11 @@
-
 import React, { useState, useMemo } from 'react';
 import Papa from 'papaparse';
 import { investigateSymptoms } from '../services/geminiService';
 import type { BatchInvestigatorData, InvestigatorHistoryItem, Medication } from '../types';
 import UploadIcon from './icons/UploadIcon';
+import BoltIcon from './icons/BoltIcon';
+import CheckCircleIcon from './icons/CheckCircleIcon';
+import ArrowPathIcon from './icons/ArrowPathIcon';
 
 interface BatchInvestigatorProps {
   t: any;
@@ -17,6 +19,7 @@ interface PatientStatus {
   status: AnalysisStatus;
   result?: InvestigatorHistoryItem;
   error?: string;
+  syncStatus?: 'idle' | 'syncing' | 'synced' | 'error';
 }
 
 const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewResult }) => {
@@ -25,6 +28,7 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisStatus, setAnalysisStatus] = useState<PatientStatus[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isEhrSyncing, setIsEhrSyncing] = useState(false);
 
   const handleFileChange = (file: File | null) => {
     if (!file) return;
@@ -54,6 +58,33 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
     });
   };
 
+  const handleEhrSync = () => {
+      setIsEhrSyncing(true);
+      // SIMULATION: Querying EHR for patients with recent adverse symptoms (e.g. Observation code for side effects)
+      setTimeout(() => {
+          const mockInvestigatorData: BatchInvestigatorData[] = [
+              { patient_id: 'FHIR-7721', symptoms: 'Dolor abdominal agudo y náuseas post-prandiales', medications: 'Metoprolol (50mg, 2/day); Atorvastatin (40mg, 1/day)', date_of_birth: '12-04-1970', pharmacogenetics: '', conditions: 'Hypertension; Hypercholesterolemia' },
+              { patient_id: 'FHIR-9902', symptoms: 'Tos seca persistente y angioedema leve facial', medications: 'Lisinopril (20mg, 1/day); Omeprazole (20mg, 1/day)', date_of_birth: '05-11-1955', pharmacogenetics: 'CYP2C19 (Poor)', conditions: 'GERD; Heart Failure' },
+              { patient_id: 'FHIR-1044', symptoms: 'Agitación psicomotriz y temblores finos', medications: 'Sertraline (100mg, 1/day)', date_of_birth: '22-08-1988', pharmacogenetics: '', conditions: 'Depression' }
+          ];
+          setPatientData(mockInvestigatorData);
+          setIsEhrSyncing(false);
+          alert(t.batch_ehr_sync_success.replace('{count}', mockInvestigatorData.length));
+      }, 2000);
+  };
+
+  const handleSyncToEhr = (patientId: string) => {
+      setAnalysisStatus(prev => prev.map(s => s.data.patient_id === patientId ? { ...s, syncStatus: 'syncing' } : s));
+      
+      // SIMULATION: Sending a FHIR DocumentReference (DiagnosticReport) back to the EHR
+      setTimeout(() => {
+          setAnalysisStatus(prev => prev.map(s => s.data.patient_id === patientId ? { ...s, syncStatus: 'synced' } : s));
+          setTimeout(() => {
+             setAnalysisStatus(prev => prev.map(s => s.data.patient_id === patientId ? { ...s, syncStatus: 'idle' } : s));
+          }, 3000);
+      }, 1500);
+  };
+
   const handleDownloadTemplate = () => {
     const csvContent = "patient_id,symptoms,medications,date_of_birth,conditions,pharmacogenetics\n" +
       `PATIENT-001,"Frequent dizziness and hypotension","Lisinopril (10mg, 1/day); Metformin (500mg, 2/day)",15-05-1965,"Hypertension",""\n` +
@@ -72,10 +103,9 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
 
   const runAnalysis = async () => {
     setIsProcessing(true);
-    setAnalysisStatus(patientData.map(data => ({ data, status: 'pending' })));
+    setAnalysisStatus(patientData.map(data => ({ data, status: 'pending', syncStatus: 'idle' })));
 
-    // Sequential process or limited concurrent to respect rate limits
-    const CONCURRENT_LIMIT = 2; // Investigating symptoms is heavy, keep limit low
+    const CONCURRENT_LIMIT = 2;
     const queue = [...patientData];
     
     const processQueue = async () => {
@@ -136,9 +166,28 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
     <div className={`space-y-6 bg-slate-50 dark:bg-slate-900/40 p-4 rounded-xl border border-slate-200 dark:border-slate-700`}>
       {!isProcessing ? (
         <>
-          <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">{t.investigator_mode_batch}</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{t.investigator_batch_description}</p>
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">{t.investigator_mode_batch}</h2>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mt-1">{t.investigator_batch_description}</p>
+            </div>
+            <button
+                onClick={handleEhrSync}
+                disabled={isEhrSyncing}
+                className="inline-flex items-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-sm font-bold shadow-md transition-all active:scale-95 disabled:opacity-50"
+            >
+                {isEhrSyncing ? (
+                    <>
+                        <svg className="animate-spin -ml-1 mr-3 h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        {t.investigator_ehr_sync_loading}
+                    </>
+                ) : (
+                    <>
+                        <BoltIcon className="h-4 w-4 mr-2" />
+                        {t.investigator_ehr_sync_btn}
+                    </>
+                )}
+            </button>
           </div>
 
           <div className="space-y-2">
@@ -196,7 +245,7 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
                     </table>
                   </div>
                   <div className="flex justify-end">
-                    <button onClick={runAnalysis} className="inline-flex items-center py-2 px-6 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700">
+                    <button onClick={runAnalysis} className="inline-flex items-center py-3 px-8 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700">
                         {t.batch_run_analysis_button.replace('{count}', patientData.length.toString())}
                     </button>
                   </div>
@@ -225,7 +274,7 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
                         </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-                    {analysisStatus.map(({data, status, result, error}, index) => (
+                    {analysisStatus.map(({data, status, result, error, syncStatus}, index) => (
                         <tr key={index}>
                             <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">{data.patient_id}</td>
                             <td className="px-4 py-3 whitespace-nowrap text-sm">
@@ -238,12 +287,29 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
                                 </span>
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                {status === 'completed' && result && (
-                                    <button onClick={() => onViewResult(result)} className="text-indigo-600 hover:text-indigo-900">{t.batch_results_view_report}</button>
-                                )}
-                                {status === 'error' && (
-                                    <p className="text-red-600 text-xs truncate max-w-[150px]" title={error}>{error}</p>
-                                )}
+                                <div className="flex flex-col sm:flex-row items-end sm:items-center justify-end gap-2">
+                                    {status === 'completed' && result && (
+                                        <>
+                                            <button 
+                                                onClick={() => handleSyncToEhr(data.patient_id)}
+                                                disabled={syncStatus === 'syncing' || syncStatus === 'synced'}
+                                                className={`flex items-center text-[10px] font-bold px-2 py-1 rounded border transition-all ${
+                                                    syncStatus === 'synced' ? 'bg-green-50 text-green-700 border-green-200' :
+                                                    syncStatus === 'syncing' ? 'bg-slate-50 text-slate-400 border-slate-200 animate-pulse' :
+                                                    'text-indigo-600 hover:text-indigo-900 border-indigo-200 hover:bg-indigo-50'
+                                                }`}
+                                            >
+                                                {syncStatus === 'synced' ? <><CheckCircleIcon className="h-3 w-3 mr-1" /> {t.investigator_results_sent_success}</> : 
+                                                 syncStatus === 'syncing' ? <><ArrowPathIcon className="h-3 w-3 mr-1 animate-spin" /> {t.investigator_results_sending}</> : 
+                                                 <><BoltIcon className="h-3 w-3 mr-1" /> {t.investigator_results_send_to_ehr}</>}
+                                            </button>
+                                            <button onClick={() => onViewResult(result)} className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 font-bold">{t.batch_results_view_report}</button>
+                                        </>
+                                    )}
+                                    {status === 'error' && (
+                                        <p className="text-red-600 text-xs truncate max-w-[150px]" title={error}>{error}</p>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     ))}
@@ -251,7 +317,7 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
                 </table>
             </div>
             {isBatchFinished && (
-                <button onClick={() => setIsProcessing(false)} className="w-full py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-medium">
+                <button onClick={() => setIsProcessing(false)} className="w-full py-3 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-lg text-sm font-bold shadow-sm transition-all hover:bg-slate-200">
                     Volver al Cargador
                 </button>
             )}
