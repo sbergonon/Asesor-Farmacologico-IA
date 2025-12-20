@@ -10,26 +10,31 @@ import type {
 import { translations } from '../lib/translations';
 
 /**
- * Obtiene y diagnostica la clave API.
+ * Valida la clave API y detecta si es un valor de marcador de posición.
  */
 const getValidatedApiKey = (lang: 'es' | 'en'): string => {
     const rawKey = process.env.API_KEY;
     const t = (translations as any)[lang];
 
-    // DIAGNÓSTICO EN CONSOLA (Visible con F12)
-    const debugInfo = rawKey ? `Longitud: ${rawKey.length}, Empieza por: ${rawKey.substring(0, 4)}...` : 'TOTALMENTE INDEFINIDA';
-    console.log(`[DEBUG] Comprobando API_KEY: ${debugInfo}`);
+    // Diagnóstico detallado para el usuario en consola
+    console.log(`[DEBUG] Clave detectada: ${rawKey ? rawKey.substring(0, 4) : 'NULL'}... (Longitud: ${rawKey?.length || 0})`);
 
-    if (!rawKey || rawKey === 'undefined' || rawKey === 'null' || rawKey.trim() === '') {
-        console.error("ERROR CRÍTICO: La clave API no ha llegado al navegador. Comprueba que en Render la variable se llame API_KEY y que hayas hecho 'Clear Cache and Deploy'.");
-        throw new Error(t.error_api_key_invalid + " (Causa: Clave no inyectada en el build)");
+    // 1. Verificar si es indefinida o vacía
+    if (!rawKey || rawKey === 'undefined' || rawKey.trim() === '') {
+        throw new Error(t.error_api_key_invalid + " (Causa: Variable API_KEY no definida en Render)");
+    }
+
+    // 2. Detectar específicamente el string de marcador de posición del sistema
+    if (rawKey.includes('PLACEHOLDER')) {
+        console.error("ERROR: El sistema está usando 'PLACEHOLDER_API_KEY'. Render no ha sobrescrito la variable.");
+        throw new Error(t.error_api_key_invalid + " (Causa: El sistema detecta un valor PLACEHOLDER. Revise las variables en Render y haga 'Clear Cache and Deploy')");
     }
 
     const cleaned = rawKey.trim().replace(/^["']|["']$/g, '');
 
+    // 3. Validar formato real de Google
     if (!cleaned.startsWith('AIza')) {
-        console.error(`ERROR DE FORMATO: La clave detectada no tiene el prefijo de Google (AIza). Valor actual: ${cleaned.substring(0, 5)}...`);
-        throw new Error(t.error_api_key_invalid + " (Causa: Formato de clave inválido)");
+        throw new Error(t.error_api_key_invalid + " (Causa: La clave no empieza por AIza)");
     }
 
     return cleaned;
@@ -45,92 +50,77 @@ const getSystemConfig = (): SystemSettings => {
 
 const buildSystemInstruction = (lang: 'es' | 'en'): string => {
     const config = getSystemConfig();
-    const priority = config.prioritySources ? `PRIORITIZE medical information from the following domains: ${config.prioritySources}.` : '';
-    const excluded = config.excludedSources ? `STRICTLY EXCLUDE information from: ${config.excludedSources}.` : '';
+    const priority = config.prioritySources ? `PRIORITIZE medical information from: ${config.prioritySources}.` : '';
+    const excluded = config.excludedSources ? `STRICTLY EXCLUDE: ${config.excludedSources}.` : '';
     
-    return `You are a Clinical Pharmacologist and Patient Safety Expert.
-    Focus on evidence-based medical results.
-    ${priority}
-    ${excluded}
-    Safety Strictness Level: ${config.safetyStrictness.toUpperCase()}.
-    Respond exclusively in ${lang === 'es' ? 'Spanish' : 'English'}.
-    Precision is mandatory. Explain the pathophysiology behind every finding.`;
+    return `You are a Clinical Pharmacologist. 
+    ${priority} ${excluded}
+    Respond in ${lang === 'es' ? 'Spanish' : 'English'}.
+    Focus on evidence-based drug interactions and safety.`;
 };
 
 async function callGemini(prompt: string, lang: 'es' | 'en'): Promise<any> {
+    // La clave se valida en cada llamada para reaccionar a cambios en el entorno
     const apiKey = getValidatedApiKey(lang);
     const ai = new GoogleGenAI({ apiKey });
     
-    const modelsToTry = ["gemini-3-pro-preview", "gemini-3-flash-preview"];
-    let lastError: any = null;
+    // Intentar con el modelo pro primero, luego flash como backup
+    const models = ["gemini-3-pro-preview", "gemini-3-flash-preview"];
+    let lastErr;
 
-    for (const modelName of modelsToTry) {
+    for (const model of models) {
         try {
-            console.debug(`Llamando a IA (${modelName})...`);
-            const response = await ai.models.generateContent({
-                model: modelName,
+            return await ai.models.generateContent({
+                model,
                 contents: prompt,
                 config: {
                     systemInstruction: buildSystemInstruction(lang),
                     tools: [{ googleSearch: {} }]
                 },
             });
-            return response;
-        } catch (error: any) {
-            lastError = error;
-            if (error.status === 404 || error.status === 403) continue;
-            throw error; 
+        } catch (e: any) {
+            lastErr = e;
+            if (e.status === 404 || e.status === 403) continue;
+            throw e;
         }
     }
-    throw lastError;
+    throw lastErr;
 }
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = (translations as any)[lang];
 
   try {
-    const medList = medications.map(med => {
-      let medStr = med.name;
-      const details = [med.dosage, med.frequency].filter(Boolean).join(', ');
-      if (details) medStr += ` (${details})`;
-      return medStr;
-    }).join('; ');
-
-    const prompt = `PERFIL DEL PACIENTE:
+    const medList = medications.map(m => `${m.name} (${m.dosage}, ${m.frequency})`).join('; ');
+    const prompt = `Analice la seguridad farmacológica para este paciente:
       - Medicamentos: ${medList}
       - Alergias: ${allergies || 'Ninguna'}
-      - Suplementos: ${otherSubstances || 'Ninguna'}
-      - Farmacogenética: ${pharmacogenetics || 'No proporcionado'}
-      - Diagnósticos: ${conditions}
-      - Edad: ${dateOfBirth || 'No proporcionada'}
-
-      Realice un análisis clínico detallado.`;
+      - Suplementos: ${otherSubstances || 'Ninguno'}
+      - Farmacogenética: ${pharmacogenetics || 'N/A'}
+      - Condiciones: ${conditions}
+      - FN: ${dateOfBirth || 'N/A'}`;
 
     const response = await callGemini(prompt, lang);
-    const fullText = response.text || "";
-
+    const text = response.text || "";
+    
     const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
-      .filter(chunk => chunk.web?.uri && chunk.web?.title)
-      .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
+      .filter(c => c.web?.uri && c.web?.title)
+      .map(c => ({ uri: c.web!.uri!, title: c.web!.title! }));
       
     return { 
-        analysisText: fullText, 
+        analysisText: text, 
         sources, drugDrugInteractions: [], drugSubstanceInteractions: [], drugAllergyAlerts: [], 
         drugConditionContraindications: [], drugPharmacogeneticContraindications: [], beersCriteriaAlerts: [] 
     };
   } catch (error: any) {
-    console.error("Error en servicio:", error.status, error.message);
-    if (error.status === 400 || error.message?.includes('API key')) throw new Error(t.error_api_key_invalid);
+    console.error("Error clínico:", error);
+    if (error.message?.includes('PLACEHOLDER') || error.status === 400) throw new Error(t.error_api_key_invalid);
     throw new Error(t.error_service_unavailable);
   }
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    try {
-        const prompt = `Investigue si "${symptoms}" puede ser un efecto adverso del tratamiento actual.`;
-        const response = await callGemini(prompt, lang);
-        return { analysisText: response.text || "", sources: [], matches: [] };
-    } catch (error: any) {
-        throw error;
-    }
+    const prompt = `Investigue si el síntoma "${symptoms}" puede ser un efecto adverso del tratamiento actual.`;
+    const response = await callGemini(prompt, lang);
+    return { analysisText: response.text || "", sources: [], matches: [] };
 };
