@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import Papa from 'papaparse';
 import { investigateSymptoms } from '../services/geminiService';
@@ -40,7 +41,8 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        const requiredHeaders = ['patient_id', 'symptoms', 'medications', 'date_of_birth', 'conditions', 'pharmacogenetics'];
+        // Fixed: added 'allergies' to requiredHeaders to match investigateSymptoms signature
+        const requiredHeaders = ['patient_id', 'symptoms', 'medications', 'date_of_birth', 'conditions', 'pharmacogenetics', 'allergies'];
         const headers = results.meta.fields || [];
         const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
 
@@ -62,10 +64,11 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
       setIsEhrSyncing(true);
       // SIMULATION: Querying EHR for patients with recent adverse symptoms (e.g. Observation code for side effects)
       setTimeout(() => {
+          // Fixed: added 'allergies' to mock patient data
           const mockInvestigatorData: BatchInvestigatorData[] = [
-              { patient_id: 'FHIR-7721', symptoms: 'Dolor abdominal agudo y náuseas post-prandiales', medications: 'Metoprolol (50mg, 2/day); Atorvastatin (40mg, 1/day)', date_of_birth: '12-04-1970', pharmacogenetics: '', conditions: 'Hypertension; Hypercholesterolemia' },
-              { patient_id: 'FHIR-9902', symptoms: 'Tos seca persistente y angioedema leve facial', medications: 'Lisinopril (20mg, 1/day); Omeprazole (20mg, 1/day)', date_of_birth: '05-11-1955', pharmacogenetics: 'CYP2C19 (Poor)', conditions: 'GERD; Heart Failure' },
-              { patient_id: 'FHIR-1044', symptoms: 'Agitación psicomotriz y temblores finos', medications: 'Sertraline (100mg, 1/day)', date_of_birth: '22-08-1988', pharmacogenetics: '', conditions: 'Depression' }
+              { patient_id: 'FHIR-7721', symptoms: 'Dolor abdominal agudo y náuseas post-prandiales', medications: 'Metoprolol (50mg, 2/day); Atorvastatin (40mg, 1/day)', date_of_birth: '12-04-1970', pharmacogenetics: '', conditions: 'Hypertension; Hypercholesterolemia', allergies: 'NSAIDs' },
+              { patient_id: 'FHIR-9902', symptoms: 'Tos seca persistente y angioedema leve facial', medications: 'Lisinopril (20mg, 1/day); Omeprazole (20mg, 1/day)', date_of_birth: '05-11-1955', pharmacogenetics: 'CYP2C19 (Poor)', conditions: 'GERD; Heart Failure', allergies: 'Penicillin' },
+              { patient_id: 'FHIR-1044', symptoms: 'Agitación psicomotriz y temblores finos', medications: 'Sertraline (100mg, 1/day)', date_of_birth: '22-08-1988', pharmacogenetics: '', conditions: 'Depression', allergies: '' }
           ];
           setPatientData(mockInvestigatorData);
           setIsEhrSyncing(false);
@@ -86,9 +89,10 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
   };
 
   const handleDownloadTemplate = () => {
-    const csvContent = "patient_id,symptoms,medications,date_of_birth,conditions,pharmacogenetics\n" +
-      `PATIENT-001,"Frequent dizziness and hypotension","Lisinopril (10mg, 1/day); Metformin (500mg, 2/day)",15-05-1965,"Hypertension",""\n` +
-      `PATIENT-002,"Generalized skin rash","Amoxicillin (500mg, 3/day)",20-11-1980,"Dental infection",""`;
+    // Fixed: added 'allergies' column to CSV template
+    const csvContent = "patient_id,symptoms,medications,date_of_birth,conditions,pharmacogenetics,allergies\n" +
+      `PATIENT-001,"Frequent dizziness and hypotension","Lisinopril (10mg, 1/day); Metformin (500mg, 2/day)",15-05-1965,"Hypertension","",""\n` +
+      `PATIENT-002,"Generalized skin rash","Amoxicillin (500mg, 3/day)",20-11-1980,"Dental infection","","Penicillin"`;
     
     const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -130,7 +134,8 @@ const BatchInvestigator: React.FC<BatchInvestigatorProps> = ({ t, lang, onViewRe
                   return { name: str, dosage: '', frequency: '' };
               });
             
-            const result = await investigateSymptoms(patient.symptoms, meds, patient.conditions, patient.date_of_birth, patient.pharmacogenetics, lang);
+            // Fixed: Added the missing 6th argument 'allergies' to investigateSymptoms call
+            const result = await investigateSymptoms(patient.symptoms, meds, patient.conditions, patient.date_of_birth, patient.pharmacogenetics, patient.allergies || '', lang);
             
             const historyItem: InvestigatorHistoryItem = {
                 id: new Date().toISOString() + patient.patient_id,

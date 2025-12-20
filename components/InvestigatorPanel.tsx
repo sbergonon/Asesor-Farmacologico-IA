@@ -1,14 +1,12 @@
 
-import React, { useState, useRef, useCallback } from 'react';
-import type { InvestigatorResult, Medication, InvestigatorHistoryItem } from '../types';
+import React, { useState, useRef } from 'react';
+import type { InvestigatorResult, Medication } from '../types';
 import { investigateSymptoms } from '../services/geminiService';
+import { generateClinicalPDF } from '../lib/pdfGenerator';
 import SparklesIcon from './icons/SparklesIcon';
-import AlertTriangleIcon from './icons/AlertTriangleIcon';
+import InfoCircleIcon from './icons/InfoCircleIcon';
+import ArrowPathIcon from './icons/ArrowPathIcon';
 import DownloadIcon from './icons/DownloadIcon';
-import ShareIcon from './icons/ShareIcon';
-import { ApiKeyError } from '../types';
-import html2canvas from 'html2canvas';
-import jsPDF from 'jspdf';
 import BatchInvestigator from './BatchInvestigator';
 
 interface InvestigatorPanelProps {
@@ -16,332 +14,136 @@ interface InvestigatorPanelProps {
   conditions: string;
   dateOfBirth: string;
   pharmacogenetics: string;
+  allergies?: string;
   t: any;
   lang: 'es' | 'en';
 }
 
-const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, conditions, dateOfBirth, pharmacogenetics, t, lang }) => {
+const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, conditions, dateOfBirth, pharmacogenetics, allergies, t, lang }) => {
   const [mode, setMode] = useState<'individual' | 'batch'>('individual');
   const [symptoms, setSymptoms] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [result, setResult] = useState<InvestigatorResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isExportingPdf, setIsExportingPdf] = useState(false);
-  const reportRef = useRef<HTMLDivElement>(null);
-
-  // Helper to load result from batch
-  const handleLoadFromBatch = useCallback((item: InvestigatorHistoryItem) => {
-      setSymptoms(item.symptoms);
-      setResult(item.result);
-      setMode('individual');
-  }, []);
 
   const handleInvestigate = async () => {
     if (!symptoms.trim()) return;
     setIsLoading(true);
-    setError(null);
-    setResult(null);
-
     try {
-        const res = await investigateSymptoms(symptoms, medications, conditions, dateOfBirth, pharmacogenetics, lang);
+        const res = await investigateSymptoms(symptoms, medications, conditions, dateOfBirth, pharmacogenetics, allergies || '', lang);
         setResult(res);
-    } catch (e: any) {
-        if (e instanceof ApiKeyError) {
-            setError(t.error_api_key_invalid);
-        } else {
-            setError(e.message || t.error_unexpected);
-        }
-    } finally {
-        setIsLoading(false);
-    }
+    } finally { setIsLoading(false); }
   };
 
-  const handleShare = async () => {
+  const handleExportPDF = async () => {
     if (!result) return;
-
-    const matchesSummary = result.matches.length > 0 
-        ? result.matches.map(m => `- ${m.cause} (${m.probability}): ${m.mechanism}`).join('\n')
-        : "Sin coincidencias directas.";
-
-    const summaryText = [
-        `🕵️‍♂️ ${t.investigator_title} - Informe`,
-        `Síntoma: ${symptoms}`,
-        '',
-        'CAUSAS POTENCIALES:',
-        matchesSummary,
-        '',
-        'Nota: Generado por IA. Consulte a un médico.',
-    ].join('\n');
-
-    const shareData = {
-        title: 'Investigación Clínica',
-        text: summaryText,
-    };
-
-    if (navigator.share) {
-        try {
-            await navigator.share(shareData);
-        } catch (err) {
-            console.log('Share cancelled', err);
-        }
-    } else {
-        const subject = encodeURIComponent("Informe de Investigación Clínica");
-        const body = encodeURIComponent(summaryText);
-        window.location.href = `mailto:?subject=${subject}&body=${body}`;
-    }
-  };
-
-  const handleExportPdf = async () => {
-    if (!reportRef.current) return;
-    setIsExportingPdf(true);
-
+    setIsExporting(true);
     try {
-        const canvas = await html2canvas(reportRef.current, {
-            scale: 2,
-            logging: false,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            onclone: (clonedDoc) => {
-                const report = clonedDoc.getElementById('investigator-report-content');
-                if (report) {
-                    const style = clonedDoc.createElement('style');
-                    style.innerHTML = `
-                        #investigator-report-content {
-                            width: 760px !important;
-                            padding: 20px !important;
-                            background: white !important;
-                            color: #1e293b !important;
-                            font-family: 'Inter', sans-serif !important;
-                        }
-                        * { color: #1e293b !important; }
-                        h2, h3 { color: #2563eb !important; margin-bottom: 10px !important; }
-                        p, li, td, th { font-size: 10px !important; }
-                        table { border-collapse: collapse !important; width: 100% !important; margin-bottom: 15px !important; }
-                        th { background-color: #f1f5f9 !important; text-transform: uppercase !important; font-size: 9px !important; }
-                        td, th { padding: 8px !important; border-bottom: 1px solid #e2e8f0 !important; }
-                        .risk-badge { padding: 2px 6px !important; font-size: 9px !important; border-radius: 4px !important; display: inline-block !important; }
-                        .bg-red-100 { background-color: #fee2e2 !important; color: #991b1b !important; }
-                        .bg-amber-100 { background-color: #fef3c7 !important; color: #92400e !important; }
-                        .bg-blue-100 { background-color: #dbeafe !important; color: #1e40af !important; }
-                        .prose { max-width: 100% !important; font-size: 10px !important; }
-                    `;
-                    clonedDoc.head.appendChild(style);
-                }
-            }
-        });
-
-        const imgData = canvas.toDataURL('image/jpeg', 0.85);
-        const pdf = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-        
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = pdf.internal.pageSize.getHeight();
-        const canvasWidth = canvas.width;
-        const canvasHeight = canvas.height;
-        const ratio = canvasWidth / pdfWidth;
-        const imgHeight = canvasHeight / ratio;
-
-        let heightLeft = imgHeight;
-        let position = 0;
-
-        pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-        heightLeft -= pdfHeight;
-
-        while (heightLeft > 0) {
-            position -= pdfHeight;
-            pdf.addPage();
-            pdf.addImage(imgData, 'JPEG', 0, position, pdfWidth, imgHeight);
-            heightLeft -= pdfHeight;
-        }
-
-        pdf.save('clinical_investigation_report.pdf');
-
-    } catch (e) {
-        console.error("PDF Export failed", e);
-    } finally {
-        setIsExportingPdf(false);
-    }
+      generateClinicalPDF('investigator', result, t, { id: symptoms, medications, dob: dateOfBirth, conditions, allergies: allergies || '' });
+    } finally { setIsExporting(false); }
   };
 
   const formattedText = (text: string) => {
-    return text
-    .replace(/### (.*?)\n/g, '<h3>$1</h3>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n---\n/g, '<hr />')
-    .replace(/\n/g, '<br />');
+    if (!text) return "";
+    let cleanText = text.replace(/PARTE [1-2]:/gi, '').replace(/INFORME TÉCNICO:/gi, '').replace(/TECHNICAL REPORT:/gi, '').trim();
+    return cleanText
+      .replace(/^### (.*$)/gim, '<h3 class="text-lg md:text-xl font-bold text-slate-800 dark:text-slate-100 mt-6 mb-2 border-b pb-1">$1</h3>')
+      .replace(/^## (.*$)/gim, '<h2 class="text-xl md:text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-8 mb-4">$1</h2>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-700 dark:text-indigo-300">$1</strong>')
+      .replace(/^\* (.*$)/gim, '<li class="ml-4 list-disc mb-1 text-sm md:text-base">$1</li>')
+      .replace(/\n/g, '<br />');
   };
+
+  const emptyLabel = lang === 'es' ? 'Ninguno/a' : 'None';
+  const naLabel = lang === 'es' ? 'No disponible' : 'N/A';
 
   return (
     <div className="bg-white dark:bg-slate-800/50 p-4 md:p-6 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-700 animate-fade-in">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-            <div className="flex items-center">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg mr-3">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center space-x-3">
+                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
                     <SparklesIcon className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">{t.investigator_title}</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{t.investigator_subtitle}</p>
+                    <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{t.investigator_title}</h2>
+                    <p className="text-[10px] md:text-xs text-slate-500">{t.investigator_subtitle}</p>
                 </div>
             </div>
-
-            <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg self-start md:self-center">
-                <button
-                    onClick={() => setMode('individual')}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'individual' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    {t.mode_individual}
-                </button>
-                <button
-                    onClick={() => setMode('batch')}
-                    className={`px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'batch' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                    {t.mode_batch}
-                </button>
+            <div className="flex bg-slate-100 dark:bg-slate-700 p-1 rounded-lg shadow-inner w-full sm:w-auto">
+                <button onClick={() => setMode('individual')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'individual' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{t.mode_individual}</button>
+                <button onClick={() => setMode('batch')} className={`flex-1 sm:flex-none px-4 py-1.5 text-xs font-bold rounded-md transition-all ${mode === 'batch' ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-500'}`}>{t.mode_batch}</button>
             </div>
         </div>
 
-        {mode === 'batch' ? (
-            <BatchInvestigator t={t} lang={lang} onViewResult={handleLoadFromBatch} />
-        ) : (
-            <div className="animate-fade-in">
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/80 rounded-lg border border-slate-200 dark:border-slate-700 mb-6">
-                    <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 mb-2 uppercase tracking-wide">Contexto Clínico Activo</p>
-                    <div className="text-sm text-slate-600 dark:text-slate-300 space-y-1">
-                        <p><strong>Meds:</strong> {medications.length > 0 ? medications.map(m => m.name).join(', ') : 'Ninguno'}</p>
-                        <p><strong>Cond:</strong> {conditions || 'Ninguna'}</p>
-                        <p><strong>Genetics:</strong> {pharmacogenetics || 'N/A'}</p>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-400 italic">{t.investigator_context_notice}</p>
+        <div className="mb-6 p-4 md:p-5 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+            <h4 className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3 flex items-center">
+                <InfoCircleIcon className="h-3 w-3 mr-1.5" /> {t.investigator_context_title}
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-y-6 md:gap-x-8">
+                <div>
+                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{t.investigator_treatment_label}</span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{medications.length > 0 ? medications.map(m => m.name).join(', ') : emptyLabel}</p>
                 </div>
-
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Síntomas Observados / Signos Clínicos</label>
-                        <textarea 
-                            value={symptoms}
-                            onChange={(e) => setSymptoms(e.target.value)}
-                            placeholder={t.investigator_input_placeholder}
-                            className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 min-h-[100px]"
-                        />
-                    </div>
-                    <button
-                        onClick={handleInvestigate}
-                        disabled={isLoading || !symptoms.trim()}
-                        className="w-full inline-flex justify-center items-center py-3 px-6 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors"
-                    >
-                        {isLoading ? (
-                            <>
-                                <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Analizando...
-                            </>
-                        ) : (
-                            <>
-                                <SparklesIcon className="h-5 w-5 mr-2" />
-                                {t.investigator_button}
-                            </>
-                        )}
-                    </button>
+                <div>
+                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{t.investigator_diagnosis_label}</span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{conditions || naLabel}</p>
                 </div>
+                <div>
+                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{t.investigator_allergy_label}</span>
+                    <p className="text-xs font-semibold text-red-600 dark:text-red-400 mt-0.5">{allergies || emptyLabel}</p>
+                </div>
+                <div>
+                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{t.investigator_age_label}</span>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mt-0.5">{dateOfBirth || naLabel}</p>
+                </div>
+                <div className="sm:col-span-2">
+                    <span className="text-[9px] md:text-[10px] font-bold text-slate-500 uppercase">{t.investigator_pgx_label}</span>
+                    <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-0.5">{pharmacogenetics || naLabel}</p>
+                </div>
+            </div>
+        </div>
 
-                {error && (
-                    <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm flex items-center">
-                        <AlertTriangleIcon className="h-5 w-5 mr-2" />
-                        {error}
-                    </div>
-                )}
+        {mode === 'batch' ? <BatchInvestigator t={t} lang={lang} onViewResult={() => {}} /> : (
+            <div className="space-y-6">
+                <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl border border-indigo-100 dark:border-indigo-900/30">
+                    <label className="block text-[10px] font-black uppercase text-indigo-500 mb-2 tracking-wide">Observación Clínica / Síntoma a Investigar</label>
+                    <textarea value={symptoms} onChange={(e) => setSymptoms(e.target.value)} placeholder={t.investigator_input_placeholder} className="w-full px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all min-h-[100px] text-sm font-medium" />
+                </div>
+                <button onClick={handleInvestigate} disabled={isLoading || !symptoms.trim()} className="w-full py-3 md:py-4 bg-indigo-600 text-white font-black rounded-xl shadow-lg hover:bg-indigo-700 disabled:opacity-50 transition-all flex items-center justify-center tracking-widest uppercase text-[10px] md:text-xs">
+                    {isLoading ? <ArrowPathIcon className="h-5 w-5 animate-spin mr-2" /> : <SparklesIcon className="h-5 w-5 mr-2" />}
+                    {isLoading ? t.investigator_reasoning_btn : t.investigator_button}
+                </button>
 
                 {result && (
-                    <div className="mt-8 space-y-6 animate-fade-in">
-                        <div ref={reportRef} id="investigator-report-content" className="space-y-6 bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 border-b pb-2">Informe de Investigación Clínica</h3>
-                            
-                            <div className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded text-xs text-slate-600 dark:text-slate-400">
-                                <p><strong>Síntoma Reportado:</strong> {symptoms}</p>
-                                <p><strong>Contexto:</strong> {medications.map(m => m.name).join(', ')} | {conditions}</p>
+                    <div className="mt-6 md:mt-8 space-y-6 animate-fade-in">
+                        <div className="bg-white dark:bg-slate-900 p-4 md:p-8 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl space-y-6 md:space-y-8">
+                            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+                                <h3 className="text-xl md:text-3xl font-black text-slate-800 dark:text-white">{t.investigator_causality_analysis}</h3>
+                                <button onClick={handleExportPDF} disabled={isExporting} className="w-full sm:w-auto p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-indigo-100 transition-colors shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                                    {isExporting ? <ArrowPathIcon className="h-5 w-5 animate-spin" /> : <DownloadIcon className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
+                                </button>
                             </div>
-
-                            {result.matches.length > 0 && (
-                                <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
-                                    <div className="bg-indigo-50 dark:bg-indigo-900/30 px-4 py-2 border-b border-indigo-100 dark:border-slate-700">
-                                        <h4 className="font-bold text-indigo-800 dark:text-indigo-200 text-sm">{t.investigator_results_title}</h4>
-                                    </div>
-                                    <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
-                                        <thead className="bg-slate-50 dark:bg-slate-900">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t.investigator_cause}</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t.investigator_mechanism}</th>
-                                                <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase">{t.investigator_probability}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-                                            {result.matches.map((match, idx) => (
-                                                <tr key={idx}>
-                                                    <td className="px-4 py-3 text-sm font-medium text-slate-900 dark:text-slate-100">{match.cause}</td>
-                                                    <td className="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">{match.mechanism}</td>
-                                                    <td className="px-4 py-3 text-sm">
-                                                        <span className={`risk-badge px-2 py-1 rounded-full text-[10px] font-bold uppercase
-                                                            ${match.probability.toLowerCase().includes('high') || match.probability.toLowerCase().includes('alta') ? 'bg-red-100 text-red-800' : 
-                                                            match.probability.toLowerCase().includes('medium') || match.probability.toLowerCase().includes('media') ? 'bg-amber-100 text-amber-800' : 
-                                                            'bg-blue-100 text-blue-800'}`}>
-                                                            {match.probability}
-                                                        </span>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-
-                            <div className="prose prose-slate dark:prose-invert max-w-none text-sm" dangerouslySetInnerHTML={{ __html: formattedText(result.analysisText) }}></div>
                             
-                            {result.sources.length > 0 && (
-                                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                                    <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2">Fuentes Consultadas</h4>
-                                    <ul className="space-y-1">
-                                        {result.sources.map((src, i) => (
-                                            <li key={i}>
-                                                <a href={src.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                                                    {src.title}
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
+                            {result.matches.length > 0 && (
+                                <div className="grid gap-3">
+                                    {result.matches.map((match, idx) => (
+                                        <div key={idx} className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-xl border-l-4 border-l-indigo-500 flex flex-col sm:flex-row justify-between items-start gap-3 transition-all shadow-sm">
+                                            <div className="flex-grow">
+                                                <h4 className="font-bold text-slate-900 dark:text-white text-sm md:text-base">{match.cause}</h4>
+                                                <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">{match.mechanism}</p>
+                                            </div>
+                                            <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase h-fit shadow-sm whitespace-nowrap ${match.probability.toLowerCase().includes('high') || match.probability.toLowerCase().includes('alta') ? 'bg-red-100 text-red-700' : match.probability.toLowerCase().includes('medium') || match.probability.toLowerCase().includes('media') ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{match.probability}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             )}
-                        </div>
 
-                        <div className="flex flex-col sm:flex-row justify-end gap-3">
-                            <button
-                                onClick={handleShare}
-                                className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-200 w-full sm:w-auto"
-                            >
-                                <ShareIcon className="h-5 w-5 mr-2" />
-                                Compartir / Email
-                            </button>
-
-                            <button
-                                onClick={handleExportPdf}
-                                disabled={isExportingPdf}
-                                className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-slate-500 disabled:opacity-50 transition-colors duration-200 w-full sm:w-auto"
-                            >
-                                {isExportingPdf ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        {t.export_pdf_loading}
-                                    </>
-                                ) : (
-                                    <>
-                                        <DownloadIcon className="h-5 w-5 mr-2" />
-                                        {t.export_pdf_button}
-                                    </>
-                                )}
-                            </button>
+                            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                                <h4 className="text-[10px] md:text-sm font-bold uppercase text-slate-400 mb-4 flex items-center">
+                                    <InfoCircleIcon className="h-4 w-4 mr-2 flex-shrink-0" /> {t.investigator_technical_justification}
+                                </h4>
+                                <div className="prose prose-indigo dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed text-sm" dangerouslySetInnerHTML={{ __html: formattedText(result.analysisText) }}></div>
+                            </div>
                         </div>
                     </div>
                 )}

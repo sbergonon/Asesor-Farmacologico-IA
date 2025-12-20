@@ -197,6 +197,8 @@ export interface BatchInvestigatorData {
   date_of_birth: string;
   conditions: string;
   pharmacogenetics: string;
+  // Fixed: Added allergies to BatchInvestigatorData interface
+  allergies: string;
 }
 
 export interface ProactiveAlert {

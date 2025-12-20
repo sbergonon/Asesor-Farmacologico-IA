@@ -61,10 +61,9 @@ const App: React.FC = () => {
   );
   const t = translations[lang];
 
-  // Helper function to check if API key exists and is valid (not "undefined" literal)
   const isApiKeyConfigured = useCallback(() => {
     const key = process.env.API_KEY;
-    return !!key && String(key) !== "undefined" && String(key).trim() !== "";
+    return !!key && key !== "undefined" && String(key).trim() !== "";
   }, []);
 
   useEffect(() => {
@@ -209,7 +208,7 @@ const App: React.FC = () => {
         <main className="mt-4 sm:mt-6">
             {!isDataLoading && activeTab === 'form' && (
               <>
-                <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg">
+                <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg max-w-sm mx-auto">
                   <button onClick={() => setAnalysisMode('individual')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'individual' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_individual}</button>
                   <button onClick={() => permissions.canAccessBatchAnalysis && setAnalysisMode('batch')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'batch' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_batch} {permissions.canAccessBatchAnalysis && <ProBadge />}</button>
                 </div>
@@ -225,24 +224,31 @@ const App: React.FC = () => {
                               conditions={conditions} setConditions={setConditions}
                               dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
                               onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
-                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={false}
-                              onApiKeyError={() => setIsApiKeyModalVisible(true)} t={t}
+                              isLoading={isLoading} t={t}
                           />
                       </div>
                       {error && <div className="mt-6 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg animate-fade-in"><p className="font-bold">{t.error_title}</p><p>{error}</p></div>}
-                      <ResultDisplay isLoading={isLoading} analysisResult={analysisResult} t={t} />
+                      <ResultDisplay 
+                        isLoading={isLoading} 
+                        analysisResult={analysisResult} 
+                        medications={medications}
+                        patientId={patientId}
+                        dob={dateOfBirth}
+                        conditions={conditions}
+                        t={t} 
+                      />
                   </div>
                 ) : <BatchAnalysis t={t} lang={lang} onViewResult={handleLoadHistory} onAnalysisComplete={addHistoryItem} />}
               </>
             )}
             {!isDataLoading && activeTab === 'patients' && <PatientPanel profiles={patientProfiles} onLoadProfile={handleLoadProfile} onDeleteProfile={(id) => dbDeleteProfile(user.uid, id)} t={t} />}
-            {!isDataLoading && activeTab === 'investigator' && <InvestigatorPanel medications={medications} conditions={conditions} dateOfBirth={dateOfBirth} pharmacogenetics={pharmacogenetics} t={t} lang={lang} />}
+            {!isDataLoading && activeTab === 'investigator' && <InvestigatorPanel medications={medications} conditions={conditions} dateOfBirth={dateOfBirth} pharmacogenetics={pharmacogenetics} allergies={allergies} t={t} lang={lang} />}
             {!isDataLoading && activeTab === 'history' && <HistoryPanel history={history} onLoadHistory={(id) => { const item = history.find(h => h.id === id); if (item) handleLoadHistory(item); }} onClearHistory={() => dbClearHistory(user.uid)} t={t} />}
             {!isDataLoading && activeTab === 'dashboard' && <DashboardPanel history={history} t={t} />}
             {!isDataLoading && activeTab === 'admin' && <AdminPanel t={t} />}
         </main>
       </div>
-      <footer className="mt-12 py-6 bg-slate-100 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-center text-sm text-slate-500">
+      <footer className="mt-12 py-6 bg-slate-100 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] md:text-sm text-slate-500">
           <div className="container mx-auto px-4"><p>{t.footer_disclaimer}</p></div>
       </footer>
       {isTermsModalOpen && <TermsModal onClose={() => setIsTermsModalOpen(false)} t={t} />}

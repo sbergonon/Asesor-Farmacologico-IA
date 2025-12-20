@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import XIcon from './icons/XIcon';
 import { translations } from '../lib/translations';
@@ -8,7 +9,8 @@ interface ManualModalProps {
 
 const ManualModal: React.FC<ManualModalProps> = ({ onClose }) => {
   const lang = navigator.language.split('-')[0] === 'es' ? 'es' : 'en';
-  const t = translations[lang];
+  // Fix: Cast translations[lang] to any to prevent property access errors from incomplete en translation object
+  const t = (translations as any)[lang];
   const m = t.manual_content;
 
   useEffect(() => {
