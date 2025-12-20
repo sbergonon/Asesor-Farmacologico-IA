@@ -18,17 +18,6 @@ const getSystemConfig = (): SystemSettings => {
     return { prioritySources: '', excludedSources: '', safetyStrictness: 'standard' };
 };
 
-const getApiKey = () => {
-    try {
-        // @ts-ignore
-        const key = typeof process !== 'undefined' ? process.env.API_KEY : null;
-        if (!key || key === "undefined" || key === "null" || String(key).trim() === "") return null;
-        return String(key).trim();
-    } catch (e) {
-        return null;
-    }
-};
-
 const buildSystemInstruction = (lang: 'es' | 'en'): string => {
     const config = getSystemConfig();
     const priority = config.prioritySources ? `PRIORITIZE medical information from the following domains: ${config.prioritySources}.` : '';
@@ -81,11 +70,9 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = (translations as any)[lang];
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error(t.error_api_key_invalid);
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -141,10 +128,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error("API Key missing");
-
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = `Usted es un experto en Farmacología Clínica y razonamiento diagnóstico. 
     Analice la causa probable del síntoma: "${symptoms}". 
     
@@ -194,5 +178,10 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
         if (jsonMatch) { try { matches = JSON.parse(jsonMatch[0]); } catch(e) {} }
     }
 
-    return { analysisText: narrative, sources: [], matches };
+    // Correctly extracting sources from grounding metadata for investigative results as required by guidelines
+    const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
+      .filter(chunk => chunk.web?.uri && chunk.web?.title)
+      .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
+
+    return { analysisText: narrative, sources, matches };
 };

@@ -7,6 +7,7 @@ import SparklesIcon from './icons/SparklesIcon';
 import InfoCircleIcon from './icons/InfoCircleIcon';
 import ArrowPathIcon from './icons/ArrowPathIcon';
 import DownloadIcon from './icons/DownloadIcon';
+import GlobeAltIcon from './icons/GlobeAltIcon';
 import BatchInvestigator from './BatchInvestigator';
 
 interface InvestigatorPanelProps {
@@ -144,6 +145,28 @@ const InvestigatorPanel: React.FC<InvestigatorPanelProps> = ({ medications, cond
                                 </h4>
                                 <div className="prose prose-indigo dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed text-sm" dangerouslySetInnerHTML={{ __html: formattedText(result.analysisText) }}></div>
                             </div>
+
+                            {/* Added rendering of bibliography sources extracted via Google Search grounding */}
+                            {result.sources && result.sources.length > 0 && (
+                                <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                                    <h4 className="text-[10px] md:text-sm font-bold uppercase text-slate-400 mb-4 flex items-center">
+                                        <GlobeAltIcon className="h-4 w-4 mr-2 flex-shrink-0" /> {t.section_sources}
+                                    </h4>
+                                    <div className="flex flex-wrap gap-2">
+                                        {result.sources.map((source, idx) => (
+                                            <a
+                                                key={idx}
+                                                href={source.uri}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors"
+                                            >
+                                                <span className="truncate max-w-[200px]">{source.title}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 )}

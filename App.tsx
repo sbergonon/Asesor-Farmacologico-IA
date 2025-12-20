@@ -6,6 +6,7 @@ import {
   saveHistoryItem, 
   clearHistory as dbClearHistory,
   getPatientProfiles,
+  // Removed non-existent export 'withFirestore' from import
   savePatientProfile,
   deletePatientProfile as dbDeleteProfile
 } from './services/db';
@@ -21,7 +22,6 @@ import TermsModal from './components/TermsModal';
 import ManualModal from './components/ManualModal';
 import BatchAnalysis from './components/BatchAnalysis';
 import PatientPanel from './components/PatientPanel';
-import ApiKeyModal from './components/ApiKeyModal';
 import Login from './components/Login';
 import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
@@ -53,7 +53,6 @@ const App: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-  const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
   
   const [lang, setLang] = useState<'es' | 'en'>(() => {
@@ -68,16 +67,6 @@ const App: React.FC = () => {
     setLang(newLang);
     localStorage.setItem('user_lang', newLang);
   };
-
-  const isApiKeyConfigured = useCallback(() => {
-    try {
-      // @ts-ignore
-      const key = typeof process !== 'undefined' ? process.env.API_KEY : null;
-      return !!key && key !== "undefined" && key !== "null" && String(key).trim() !== "";
-    } catch (e) {
-      return false;
-    }
-  }, []);
 
   useEffect(() => {
     if (activeTab === 'dashboard' && !permissions.canAccessDashboard) setActiveTab('form');
@@ -129,11 +118,6 @@ const App: React.FC = () => {
   }, [user]);
   
   const handleAnalyze = useCallback(async () => {
-    if (!isApiKeyConfigured()) {
-      setIsApiKeyModalVisible(true);
-      return;
-    }
-
     if (medications.length === 0) {
       setError(t.error_add_medication);
       return;
@@ -156,16 +140,11 @@ const App: React.FC = () => {
       };
       await addHistoryItem(newHistoryItem);
     } catch (e: any) {
-      if (e.message.includes('API key') || e.message.includes('403') || e.message.includes('401')) {
-        setError(t.error_api_key_invalid);
-        setIsApiKeyModalVisible(true);
-      } else {
-        setError(e.message || t.error_unexpected);
-      }
+      setError(e.message || t.error_unexpected);
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, isApiKeyConfigured]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -212,7 +191,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex flex-col font-sans transition-colors">
-      {isApiKeyModalVisible && <ApiKeyModal t={t} onClose={() => setIsApiKeyModalVisible(false)} />}
       <div className="container mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-8 flex-grow">
         <Header 
           appName={t.appName} 

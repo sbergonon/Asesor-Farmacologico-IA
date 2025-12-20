@@ -130,10 +130,15 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     
     // Función para resolver una marca a su genérico para las reglas proactivas
     const resolveToGeneric = (name: string) => {
-      const lower = name.toLowerCase();
-      // Primero buscar en el mapa de sinónimos
+      if (!name) return '';
+      const lower = name.toLowerCase().trim();
+      // Búsqueda directa en el mapa de sinónimos
       const fromMap = drugSynonymMap[lower];
       if (fromMap) return fromMap.toLowerCase();
+      // Búsqueda por subcadena para mayor flexibilidad (ej: "Ibuprofeno 600" -> "ibuprofen")
+      for (const [brand, generic] of Object.entries(drugSynonymMap)) {
+          if (lower.includes(brand.toLowerCase())) return generic.toLowerCase();
+      }
       return lower;
     };
 
@@ -144,11 +149,10 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     // 1. Alergias Críticas
     allergyList.forEach(userAllergy => {
       for (const groupKey in criticalAllergyRules) {
-        // Coincidencia flexible para el término de alergia (ej: 'penicil' coincide con 'penicilina')
         if (userAllergy.includes(groupKey) || groupKey.includes(userAllergy)) {
           medications.forEach((m, idx) => {
             const gen = resolvedMeds[idx];
-            if (criticalAllergyRules[groupKey].some(ruleDrug => gen.includes(ruleDrug.toLowerCase()))) {
+            if (criticalAllergyRules[groupKey].some(ruleDrug => gen.includes(ruleDrug.toLowerCase()) || ruleDrug.toLowerCase().includes(gen))) {
               alerts.push({ 
                 id: `a-${m.name}-${groupKey}`, 
                 type: 'allergy', 
@@ -168,7 +172,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
           medications.forEach((m, idx) => {
             const gen = resolvedMeds[idx];
             const rule = criticalConditionRules[conditionKey];
-            if (rule.drugs.some(d => gen.includes(d.toLowerCase()))) {
+            if (rule.drugs.some(d => gen.includes(d.toLowerCase()) || d.toLowerCase().includes(gen))) {
               alerts.push({
                 id: `c-${m.name}-${conditionKey}`,
                 type: 'condition',
@@ -183,10 +187,10 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
     // 3. Interacciones Fármaco-Fármaco
     criticalDrugInteractionRules.forEach(rule => {
-      const idx1 = resolvedMeds.findIndex(m => m.includes(rule.pair[0].toLowerCase()));
-      const idx2 = resolvedMeds.findIndex(m => m.includes(rule.pair[1].toLowerCase()));
+      const idx1 = resolvedMeds.findIndex(m => m !== '' && (m.includes(rule.pair[0].toLowerCase()) || rule.pair[0].toLowerCase().includes(m)));
+      const idx2 = resolvedMeds.findIndex(m => m !== '' && (m.includes(rule.pair[1].toLowerCase()) || rule.pair[1].toLowerCase().includes(m)));
       
-      if (idx1 !== -1 && idx2 !== -1) {
+      if (idx1 !== -1 && idx2 !== -1 && idx1 !== idx2) {
         alerts.push({ 
           id: `ddi-${rule.pair.join('-')}`, 
           type: 'drug-drug', 
@@ -196,7 +200,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       }
     });
 
-    return alerts;
+    // Eliminar duplicados por ID de alerta
+    return Array.from(new Map(alerts.map(a => [a.id, a])).values());
   }, [medications, allergies, conditions, t]);
 
   return (

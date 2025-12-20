@@ -12,6 +12,7 @@ import ChevronDownIcon from './icons/ChevronDownIcon';
 import ShareIcon from './icons/ShareIcon';
 import InfoCircleIcon from './icons/InfoCircleIcon';
 import ArrowPathIcon from './icons/ArrowPathIcon';
+import GlobeAltIcon from './icons/GlobeAltIcon';
 import SummaryPanel from './SummaryPanel';
 import { generateClinicalPDF } from '../lib/pdfGenerator';
 import { 
@@ -154,6 +155,29 @@ const ResultDisplay: React.FC<ResultDisplayProps> = ({ isLoading, analysisResult
             <h3 className="text-lg font-bold mb-3 flex items-center text-slate-800 dark:text-slate-100"><InfoCircleIcon className="h-5 w-5 mr-2 text-blue-500 flex-shrink-0" /> Informe Clínico IA</h3>
             <div className="prose prose-slate dark:prose-invert max-w-none text-slate-700 dark:text-slate-300 leading-relaxed text-sm" dangerouslySetInnerHTML={{ __html: formattedText(analysisResult.analysisText) }}></div>
           </div>
+
+          {/* Added rendering of bibliography sources extracted via Google Search grounding */}
+          {analysisResult.sources && analysisResult.sources.length > 0 && (
+            <div className="pt-6 border-t border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold mb-3 flex items-center text-slate-800 dark:text-slate-100">
+                <GlobeAltIcon className="h-5 w-5 mr-2 text-blue-500 flex-shrink-0" />
+                {t.section_sources}
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {analysisResult.sources.map((source, idx) => (
+                  <a
+                    key={idx}
+                    href={source.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center px-3 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  >
+                    <span className="truncate max-w-[200px]">{source.title}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
       </div>
     </div>
   );
