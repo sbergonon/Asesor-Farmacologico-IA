@@ -1,21 +1,28 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Asesor Farmacológico IA</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      body {
-        font-family: 'Inter', sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: { sans: ['Inter', 'sans-serif'] },
+          },
+        },
       }
+    </script>
+    <style>
+      body { font-family: 'Inter', sans-serif; }
+      .animate-fade-in { animation: fadeIn 0.5s ease-out; }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
   <script type="importmap">
 {
@@ -35,12 +42,7 @@
 <link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-slate-50 dark:bg-slate-900">
-    <div id="root">
-        <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; color: #475569; text-align: center; padding: 1rem;">
-            <h1 style="font-size: 1.5rem; font-weight: 700;">Iniciando Aplicación Clínica...</h1>
-            <p style="margin-top: 0.5rem; max-width: 400px;">Si la aplicación no carga, verifique su conexión o la configuración de su entorno de despliegue.</p>
-        </div>
-    </div>
+    <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
