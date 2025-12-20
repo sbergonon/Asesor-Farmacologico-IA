@@ -72,6 +72,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = (translations as any)[lang];
 
   try {
+    // Uso directo de la clave según directrices
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
@@ -122,7 +123,12 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    throw new Error(t.error_api_key_invalid);
+    console.error("Gemini Analysis Error:", error);
+    // Si falla por falta de clave o error 401/403, lanzamos el error traducido
+    if (error.message?.includes('API key') || error.message?.includes('401') || error.message?.includes('403')) {
+        throw new Error(t.error_api_key_invalid);
+    }
+    throw error;
   }
 };
 
