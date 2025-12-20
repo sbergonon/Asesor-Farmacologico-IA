@@ -122,8 +122,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    if (error.message?.includes('API key')) throw new Error(t.error_api_key_invalid);
-    throw error;
+    throw new Error(t.error_api_key_invalid);
   }
 };
 
@@ -172,13 +171,8 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
         const jsonStr = fullText.substring(startIndex + startMarker.length, endIndex).trim().replace(/```json|```/g, '');
         try { matches = JSON.parse(jsonStr).matches || []; } catch(e) {}
         narrative = fullText.substring(endIndex + endMarker.length).trim();
-    } else {
-        // Fallback for old formatting
-        const jsonMatch = fullText.match(/\[\s*\{\s*"cause"[\s\S]*\}\s*\]/);
-        if (jsonMatch) { try { matches = JSON.parse(jsonMatch[0]); } catch(e) {} }
     }
 
-    // Correctly extracting sources from grounding metadata for investigative results as required by guidelines
     const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
       .filter(chunk => chunk.web?.uri && chunk.web?.title)
       .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
