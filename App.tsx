@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import { 
@@ -61,12 +60,10 @@ const App: React.FC = () => {
   );
   const t = translations[lang];
 
-  useEffect(() => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
-      // No bloqueamos la UI, dejamos que InteractionForm trabaje localmente
-      // Pero podemos avisar si el usuario intenta un análisis de IA
-    }
+  // More resilient API Key checking
+  const isApiKeyValid = useMemo(() => {
+    const key = process.env.API_KEY;
+    return !!key && key !== "undefined" && key.trim().length > 5;
   }, []);
 
   useEffect(() => {
@@ -119,8 +116,7 @@ const App: React.FC = () => {
   }, [user]);
   
   const handleAnalyze = useCallback(async () => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
+    if (!isApiKeyValid) {
       setIsApiKeyModalVisible(true);
       return;
     }
@@ -157,7 +153,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, isApiKeyValid]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -180,6 +176,7 @@ const App: React.FC = () => {
       lastUpdated: new Date().toISOString(),
     };
     await savePatientProfile(user.uid, profileData);
+    // Refresh local patientProfiles state would be ideal here if in same UI
   }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth, user]);
   
   const handleLoadProfile = useCallback((id: string) => {
@@ -228,7 +225,7 @@ const App: React.FC = () => {
                               conditions={conditions} setConditions={setConditions}
                               dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
                               onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
-                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={false}
+                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={!isApiKeyValid}
                               onApiKeyError={() => setIsApiKeyModalVisible(true)} t={t}
                           />
                       </div>

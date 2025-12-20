@@ -54,14 +54,20 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
     [INTERACTION_DATA_END]
 
     Proporcione también un informe detallado en Markdown tras el bloque JSON.
+    IMPORTANTE: Responda TODO el contenido del informe en ${lang === 'es' ? 'Español' : 'Inglés'}.
   `;
 };
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = translations[lang];
+  const apiKey = process.env.API_KEY;
   
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error(t.error_api_key_invalid);
+  }
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -119,7 +125,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         beersCriteriaAlerts
     };
   } catch (error: any) {
-    if (error.message?.includes('API key') || error.message?.includes('403') || error.message?.includes('401')) {
+    if (error.message?.includes('API key') || error.message?.includes('403')) {
       throw new Error(t.error_api_key_invalid);
     }
     throw error;
@@ -130,14 +136,14 @@ export const getDetailedInteractionInfo = async (findingTitle: string, medicatio
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview", 
-        contents: `Explica detalladamente: "${findingTitle}". Contexto: ${medications.map(m => m.name).join(', ')}. Responde en ${lang === 'es' ? 'Español' : 'Inglés'}.`,
+        contents: `Explica detalladamente la fisiopatología de: "${findingTitle}". Contexto: ${medications.map(m => m.name).join(', ')}. Responde en ${lang === 'es' ? 'Español' : 'Inglés'}.`,
     });
     return response.text || "";
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Investigar síntoma: "${symptoms}" en relación a: ${medications.map(m => m.name).join(', ')}.`;
+    const prompt = `Investigar síntoma: "${symptoms}" en relación a la medicación: ${medications.map(m => m.name).join(', ')}. Contexto adicional: Condiciones: ${conditions}, FN: ${dateOfBirth}, PGx: ${pharmacogenetics}. Responde el informe de análisis en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
     const response = await ai.models.generateContent({
         model: "gemini-3-pro-preview", 
         contents: prompt,
@@ -149,7 +155,7 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
 export const analyzeSupplementInteractions = async (supplementName: string, medications: Medication[], lang: 'es' | 'en'): Promise<SupplementInteraction[]> => {
   try {
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Analiza interacciones entre el suplemento ${supplementName} y los medicamentos: ${medications.map(m => m.name).join(', ')}. Responde solo con un array JSON de objetos: medication, riskLevel, potentialEffects, recommendations.`;
+    const prompt = `Analiza interacciones entre el suplemento ${supplementName} y los medicamentos: ${medications.map(m => m.name).join(', ')}. Responde solo con un array JSON de objetos: medication, riskLevel, potentialEffects, recommendations. Usa el idioma ${lang === 'es' ? 'Español' : 'Inglés'} para los textos del JSON.`;
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
@@ -158,7 +164,6 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     const cleaned = text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleaned);
   } catch (error: any) {
-    if (error.message?.includes('API key')) throw new Error('API_KEY_ERROR');
     throw error;
   }
 };
