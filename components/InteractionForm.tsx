@@ -225,7 +225,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             <button onClick={() => currentMedication && handleAddMed({name: currentMedication})} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"><PlusIcon className="h-5 w-5"/></button>
           </div>
           {medSuggestions.length > 0 && (
-            <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
+            <ul className="absolute z-[60] w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
               {medSuggestions.map((s, i) => (
                 <li key={i} onClick={() => handleAddMed(s)} className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm flex flex-col border-b last:border-0 dark:border-slate-700">
                   <span className="font-bold">{s.term}</span>
@@ -278,7 +278,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         <div className="relative">
           <input type="text" value={currentSupplement} onChange={(e) => setCurrentSupplement(e.target.value)} placeholder={t.form_supplements_placeholder} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-900" />
           {supSuggestions.length > 0 && (
-            <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
+            <ul className="absolute z-[60] w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
               {supSuggestions.map((s, i) => (
                 <li key={i} onClick={() => {
                   const current = otherSubstances.split(',').map(x => x.trim()).filter(Boolean);
@@ -329,11 +329,13 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       <section>
         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">{t.form_conditions_label}</label>
         <div className="relative">
-          <input type="text" value={currentCondition} onChange={(e) => setCurrentCondition(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddCondition(currentCondition)} placeholder={t.form_conditions_placeholder} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none dark:bg-slate-900" />
+          <input type="text" value={currentCondition} onChange={(e) => setCurrentCondition(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleAddCondition(currentCondition); } }} placeholder={t.form_conditions_placeholder} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none dark:bg-slate-900" />
           {condSuggestions.length > 0 && (
-            <ul className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
+            <ul className="absolute z-[60] w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
               {condSuggestions.map((s, i) => (
-                <li key={i} onClick={() => handleAddCondition(s)} className="px-4 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer text-sm">{s}</li>
+                <li key={i} onClick={() => handleAddCondition(s)} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm font-medium border-b last:border-0 dark:border-slate-700">
+                  {s}
+                </li>
               ))}
             </ul>
           )}

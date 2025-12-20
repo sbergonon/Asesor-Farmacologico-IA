@@ -62,7 +62,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = translations[lang];
   const apiKey = process.env.API_KEY;
   
-  if (!apiKey || apiKey === "undefined") {
+  if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined" || String(apiKey) === "null") {
     throw new Error(t.error_api_key_invalid);
   }
 
@@ -125,7 +125,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         beersCriteriaAlerts
     };
   } catch (error: any) {
-    if (error.message?.includes('API key') || error.message?.includes('403')) {
+    if (error.message?.includes('API key') || error.message?.includes('403') || error.message?.includes('401')) {
       throw new Error(t.error_api_key_invalid);
     }
     throw error;
@@ -133,7 +133,10 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 };
 
 export const getDetailedInteractionInfo = async (findingTitle: string, medications: Medication[], conditions: string, lang: 'es' | 'en'): Promise<string> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") return "Error: API Key not configured.";
+    
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview", 
         contents: `Explica detalladamente la fisiopatología de: "${findingTitle}". Contexto: ${medications.map(m => m.name).join(', ')}. Responde en ${lang === 'es' ? 'Español' : 'Inglés'}.`,
@@ -142,7 +145,10 @@ export const getDetailedInteractionInfo = async (findingTitle: string, medicatio
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") throw new Error("API Key missing");
+
+    const ai = new GoogleGenAI({ apiKey });
     const prompt = `Investigar síntoma: "${symptoms}" en relación a la medicación: ${medications.map(m => m.name).join(', ')}. Contexto adicional: Condiciones: ${conditions}, FN: ${dateOfBirth}, PGx: ${pharmacogenetics}. Responde el informe de análisis en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
     const response = await ai.models.generateContent({
         model: "gemini-3-pro-preview", 
@@ -153,8 +159,11 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
 };
 
 export const analyzeSupplementInteractions = async (supplementName: string, medications: Medication[], lang: 'es' | 'en'): Promise<SupplementInteraction[]> => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") return [];
+
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey });
     const prompt = `Analiza interacciones entre el suplemento ${supplementName} y los medicamentos: ${medications.map(m => m.name).join(', ')}. Responde solo con un array JSON de objetos: medication, riskLevel, potentialEffects, recommendations. Usa el idioma ${lang === 'es' ? 'Español' : 'Inglés'} para los textos del JSON.`;
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
@@ -164,6 +173,6 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     const cleaned = text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleaned);
   } catch (error: any) {
-    throw error;
+    return []; // Fail silently for realtime supplement check to avoid UI disruption
   }
 };

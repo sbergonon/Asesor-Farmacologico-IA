@@ -60,10 +60,13 @@ const App: React.FC = () => {
   );
   const t = translations[lang];
 
-  // More resilient API Key checking
-  const isApiKeyValid = useMemo(() => {
+  // Dynamic API Key check helper
+  const checkApiKey = useCallback(() => {
     const key = process.env.API_KEY;
-    return !!key && key !== "undefined" && key.trim().length > 5;
+    if (!key || String(key).trim() === "" || String(key) === "undefined" || String(key) === "null") {
+      return false;
+    }
+    return String(key).length > 5;
   }, []);
 
   useEffect(() => {
@@ -116,7 +119,8 @@ const App: React.FC = () => {
   }, [user]);
   
   const handleAnalyze = useCallback(async () => {
-    if (!isApiKeyValid) {
+    // Dynamic verification on every click
+    if (!checkApiKey()) {
       setIsApiKeyModalVisible(true);
       return;
     }
@@ -132,7 +136,7 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
-    setAnalysisResult(null);
+    // Note: we don't necessarily clear analysisResult here to allow comparison if re-analyzing
 
     try {
       const result = await analyzeInteractions(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
@@ -144,7 +148,7 @@ const App: React.FC = () => {
       };
       await addHistoryItem(newHistoryItem);
     } catch (e: any) {
-      if (e.message.includes('API key')) {
+      if (e.message.includes('API key') || e.message.includes('403') || e.message.includes('401')) {
         setError(t.error_api_key_invalid);
         setIsApiKeyModalVisible(true);
       } else {
@@ -153,7 +157,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, isApiKeyValid]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, checkApiKey]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -166,6 +170,8 @@ const App: React.FC = () => {
     setAnalysisResult(item.analysisResult);
     setAnalysisMode('individual');
     setActiveTab('form');
+    // Scroll to top to see loaded form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const handleSaveOrUpdateProfile = useCallback(async () => {
@@ -176,7 +182,6 @@ const App: React.FC = () => {
       lastUpdated: new Date().toISOString(),
     };
     await savePatientProfile(user.uid, profileData);
-    // Refresh local patientProfiles state would be ideal here if in same UI
   }, [patientId, medications, allergies, otherSubstances, pharmacogenetics, conditions, dateOfBirth, user]);
   
   const handleLoadProfile = useCallback((id: string) => {
@@ -225,7 +230,7 @@ const App: React.FC = () => {
                               conditions={conditions} setConditions={setConditions}
                               dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
                               onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
-                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={!isApiKeyValid}
+                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={false}
                               onApiKeyError={() => setIsApiKeyModalVisible(true)} t={t}
                           />
                       </div>
