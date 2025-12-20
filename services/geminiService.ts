@@ -50,27 +50,15 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
     TAREA: Realice un análisis de seguridad farmacológica exhaustivo.
 
     ESTRUCTURA OBLIGATORIA DE RESPUESTA:
-
     PARTE 1: BLOQUE JSON (Entre [INTERACTION_DATA_START] y [INTERACTION_DATA_END])
-    Este bloque DEBE ser un JSON válido.
-    Categorías: drugDrugInteractions, drugSubstanceInteractions, drugAllergyAlerts, drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts.
-
-    PARTE 2: INFORME CLÍNICO DETALLADO (Markdown)
-    Un análisis narrativo profesional explicando la fisiopatología.
-
-    IDIOMA: Responda TODO en ${lang === 'es' ? 'ESPAÑOL' : 'ENGLISH'}.`;
+    PARTE 2: INFORME CLÍNICO DETALLADO (Markdown)`;
 };
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = (translations as any)[lang];
 
-  // Verificación preventiva de la clave para diagnóstico en consola
-  if (!process.env.API_KEY) {
-    console.error("CRITICAL: API_KEY is undefined or empty in process.env. Verify Render Environment Variables.");
-  }
-
   try {
-    // Inicialización del cliente por cada llamada para asegurar frescura de configuración
+    // Inicialización siguiendo la directriz de usar process.env.API_KEY directamente
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
@@ -108,7 +96,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
             drugPharmacogeneticContraindications = parsed.drugPharmacogeneticContraindications || [];
             beersCriteriaAlerts = parsed.beersCriteriaAlerts || [];
         } catch (e) {
-            console.error("Clinical Data Parse Error:", e);
+            console.warn("AI returned malformed JSON block, showing text only.");
         }
         textForDisplay = fullText.substring(endIndex + endMarker.length).trim();
     }
@@ -123,9 +111,14 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    console.error("Gemini Service Error:", error);
+    // REGISTRO DETALLADO PARA EL USUARIO (Ver en F12)
+    console.group("DEBUG: Gemini API Failure");
+    console.error("Original Error Object:", error);
+    console.error("Error Message:", error.message);
+    console.error("Status Code:", error.status);
+    console.groupEnd();
     
-    // Identificación específica de errores de autenticación/permisos
+    // Tratamiento específico de errores de autenticación
     if (error.message?.includes('API key') || error.status === 401 || error.status === 403 || error.message?.includes('not found')) {
         throw new Error(t.error_api_key_invalid);
     }
@@ -137,13 +130,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `Usted es un experto en Farmacología Clínica. Analice la causa probable del síntoma: "${symptoms}". 
-        
-        ESTRUCTURA:
-        1. Bloque JSON (Entre [CAUSALITY_DATA_START] y [CAUSALITY_DATA_END]): { matches: Array<{ cause, probability, mechanism }> }
-        2. Informe técnico Markdown después.
-        
-        Responda en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
+        const prompt = `Analice la causa probable del síntoma: "${symptoms}". Responda en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
         
         const response = await ai.models.generateContent({
             model: "gemini-3-pro-preview", 
@@ -175,7 +162,7 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
 
         return { analysisText: narrative, sources, matches };
     } catch (error: any) {
-        console.error("Investigator Service Error:", error);
+        console.error("Investigator Error:", error);
         throw error;
     }
 };
