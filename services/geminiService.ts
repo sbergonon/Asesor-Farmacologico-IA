@@ -9,6 +9,31 @@ import type {
 } from '../types';
 import { translations } from '../lib/translations';
 
+/**
+ * Obtiene y valida la clave API desde el entorno.
+ * Si Render no inyecta la clave correctamente, Vite suele ponerle el valor "undefined" como string.
+ */
+const validateAndGetApiKey = (lang: 'es' | 'en'): string => {
+    const rawKey = process.env.API_KEY;
+    const t = (translations as any)[lang];
+
+    // Detectamos si la clave es nula, vacía o literalmente el string "undefined"
+    if (!rawKey || rawKey === 'undefined' || rawKey === 'null' || rawKey.trim() === '') {
+        console.error("DIAGNÓSTICO: La variable process.env.API_KEY es indefinida. Revise las Environment Variables en Render.");
+        throw new Error(t.error_api_key_invalid + " (Causa: Variable no inyectada en el build)");
+    }
+
+    const cleanedKey = rawKey.trim().replace(/^["']|["']$/g, '');
+
+    // Las claves de Google siempre empiezan por AIza
+    if (!cleanedKey.startsWith('AIza')) {
+        console.error(`DIAGNÓSTICO: Clave con formato incorrecto. Empieza por: ${cleanedKey.substring(0, 4)}...`);
+        throw new Error(t.error_api_key_invalid + " (Causa: Formato de clave inválido)");
+    }
+
+    return cleanedKey;
+};
+
 const getSystemConfig = (): SystemSettings => {
     try {
         const stored = localStorage.getItem('system_config');
@@ -31,35 +56,18 @@ const buildSystemInstruction = (lang: 'es' | 'en'): string => {
     Precision is mandatory. Explain the pathophysiology behind every finding.`;
 };
 
-const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
-  const medList = medications.map(med => {
-      let medStr = med.name;
-      const details = [med.dosage, med.frequency].filter(Boolean).join(', ');
-      if (details) medStr += ` (${details})`;
-      return medStr;
-    }).join('; ');
-
-  return `PERFIL DEL PACIENTE:
-    - Medicamentos Activos: ${medList}
-    - Alergias: ${allergies || 'Ninguna'}
-    - Suplementos/Otras Sustancias: ${otherSubstances || 'Ninguna'}
-    - Perfil Farmacogenético: ${pharmacogenetics || 'No proporcionado'}
-    - Diagnósticos/Condiciones: ${conditions}
-    - Datos de Edad (Edad/FN): ${dateOfBirth || 'No proporcionada'}
-
-    TAREA: Realice un análisis de seguridad farmacológica exhaustivo.
-    ESTRUCTURA OBLIGATORIA: JSON (Interacciones) + Informe clínico narrativo.`;
-};
-
-// Función interna para realizar la llamada con reintento de modelo
 async function callGemini(prompt: string, lang: 'es' | 'en'): Promise<any> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = validateAndGetApiKey(lang);
+    
+    // Crear instancia justo antes de usarla para asegurar que usa la clave más reciente
+    const ai = new GoogleGenAI({ apiKey });
+    
     const modelsToTry = ["gemini-3-pro-preview", "gemini-3-flash-preview"];
     let lastError: any = null;
 
     for (const modelName of modelsToTry) {
         try {
-            console.debug(`Attempting clinical analysis with model: ${modelName}`);
+            console.debug(`Solicitando análisis clínico a: ${modelName}`);
             const response = await ai.models.generateContent({
                 model: modelName,
                 contents: prompt,
@@ -71,15 +79,12 @@ async function callGemini(prompt: string, lang: 'es' | 'en'): Promise<any> {
             return response;
         } catch (error: any) {
             lastError = error;
-            // Si el error es de cuota o modelo no encontrado, intentamos con el siguiente
-            const isNotFoundError = error.message?.includes('not found') || error.status === 404;
-            const isPermissionError = error.status === 403;
-            
-            if (isNotFoundError || isPermissionError) {
-                console.warn(`Model ${modelName} unavailable or restricted. Retrying with next model...`);
+            // Si el modelo no existe o no hay permiso, intentamos el siguiente
+            if (error.status === 404 || error.status === 403) {
+                console.warn(`Modelo ${modelName} no disponible o restringido. Reintentando con el siguiente...`);
                 continue;
             }
-            throw error; // Si es un error crítico (ej. 401), no reintentamos
+            throw error; 
         }
     }
     throw lastError;
@@ -89,37 +94,46 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = (translations as any)[lang];
 
   try {
-    const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
-    const response = await callGemini(prompt, lang);
+    const medList = medications.map(med => {
+      let medStr = med.name;
+      const details = [med.dosage, med.frequency].filter(Boolean).join(', ');
+      if (details) medStr += ` (${details})`;
+      return medStr;
+    }).join('; ');
 
+    const prompt = `PERFIL DEL PACIENTE:
+      - Medicamentos: ${medList}
+      - Alergias: ${allergies || 'Ninguna'}
+      - Suplementos/Otras Sustancias: ${otherSubstances || 'Ninguna'}
+      - Perfil Farmacogenético: ${pharmacogenetics || 'No proporcionado'}
+      - Diagnósticos: ${conditions}
+      - Edad/FN: ${dateOfBirth || 'No proporcionada'}
+
+      TAREA: Realice un análisis de seguridad farmacológica.`;
+
+    const response = await callGemini(prompt, lang);
     const fullText = response.text || "";
+
+    // Extracción de datos estructurados si existen (basado en marcadores que la IA suele usar)
     let drugDrugInteractions = [];
     let drugSubstanceInteractions = [];
     let drugAllergyAlerts = [];
     let drugConditionContraindications = [];
     let drugPharmacogeneticContraindications = [];
     let beersCriteriaAlerts = [];
-    let textForDisplay = fullText;
 
-    const startMarker = '[INTERACTION_DATA_START]';
-    const endMarker = '[INTERACTION_DATA_END]';
-    const startIndex = fullText.indexOf(startMarker);
-    const endIndex = fullText.indexOf(endMarker);
-
-    if (startIndex !== -1 && endIndex !== -1) {
-        const jsonStr = fullText.substring(startIndex + startMarker.length, endIndex).trim().replace(/```json|```/g, '');
+    // Búsqueda de bloque JSON en la respuesta
+    const jsonMatch = fullText.match(/\[INTERACTION_DATA_START\]([\s\S]*?)\[INTERACTION_DATA_END\]/);
+    if (jsonMatch) {
         try {
-            const parsed = JSON.parse(jsonStr);
+            const parsed = JSON.parse(jsonMatch[1].trim().replace(/```json|```/g, ''));
             drugDrugInteractions = parsed.drugDrugInteractions || [];
             drugSubstanceInteractions = parsed.drugSubstanceInteractions || [];
             drugAllergyAlerts = parsed.drugAllergyAlerts || [];
             drugConditionContraindications = parsed.drugConditionContraindications || [];
             drugPharmacogeneticContraindications = parsed.drugPharmacogeneticContraindications || [];
             beersCriteriaAlerts = parsed.beersCriteriaAlerts || [];
-        } catch (e) {
-            console.error("Clinical JSON parsing failed.");
-        }
-        textForDisplay = fullText.substring(endIndex + endMarker.length).trim();
+        } catch (e) {}
     }
 
     const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
@@ -127,17 +141,18 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
       
     return { 
-        analysisText: textForDisplay, 
+        analysisText: fullText.split('[INTERACTION_DATA_START]')[0].trim(), 
         sources, drugDrugInteractions, drugSubstanceInteractions, drugAllergyAlerts, 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    console.group("CRITICAL DIAGNOSTIC: Google API Error");
+    console.group("ERROR EN SERVICIO CLÍNICO");
     console.error("Status:", error.status);
-    console.error("Message:", error.message);
+    console.error("Mensaje:", error.message);
     console.groupEnd();
-    
-    if (error.message?.includes('API key') || error.status === 401 || error.status === 403 || error.message?.includes('not found')) {
+
+    // Mapeo amigable de errores técnicos
+    if (error.status === 400 || error.message?.includes('API key')) {
         throw new Error(t.error_api_key_invalid);
     }
     throw new Error(t.error_service_unavailable);
@@ -146,31 +161,16 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
     try {
-        const prompt = `Analice causas del síntoma: "${symptoms}".`;
+        const prompt = `Analice posibles causas medicamentosas del síntoma: "${symptoms}" en el contexto del tratamiento actual.`;
         const response = await callGemini(prompt, lang);
 
         const fullText = response.text || "";
-        let matches = [];
-        let narrative = fullText;
-
-        const startMarker = '[CAUSALITY_DATA_START]';
-        const endMarker = '[CAUSALITY_DATA_END]';
-        const startIndex = fullText.indexOf(startMarker);
-        const endIndex = fullText.indexOf(endMarker);
-
-        if (startIndex !== -1 && endIndex !== -1) {
-            const jsonStr = fullText.substring(startIndex + startMarker.length, endIndex).trim().replace(/```json|```/g, '');
-            try { matches = JSON.parse(jsonStr).matches || []; } catch(e) {}
-            narrative = fullText.substring(endIndex + endMarker.length).trim();
-        }
-
         const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
           .filter(chunk => chunk.web?.uri && chunk.web?.title)
           .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
 
-        return { analysisText: narrative, sources, matches };
+        return { analysisText: fullText, sources, matches: [] };
     } catch (error: any) {
-        console.error("Investigator Error Diagnosis:", error.status, error.message);
         throw error;
     }
 };
