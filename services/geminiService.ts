@@ -72,8 +72,13 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
   const t = (translations as any)[lang];
 
   try {
-    // Uso directo de la clave según directrices
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = process.env.API_KEY;
+    if (!key) {
+        console.error("DEBUG: process.env.API_KEY is undefined. Check Render environment variables.");
+        throw new Error("AUTH_KEY_MISSING");
+    }
+
+    const ai = new GoogleGenAI({ apiKey: key });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
     const response = await ai.models.generateContent({
@@ -123,17 +128,23 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    console.error("Gemini Analysis Error:", error);
-    // Si falla por falta de clave o error 401/403, lanzamos el error traducido
-    if (error.message?.includes('API key') || error.message?.includes('401') || error.message?.includes('403')) {
+    console.error("CRITICAL Gemini Error:", error);
+    
+    if (error.message === "AUTH_KEY_MISSING" || error.message?.includes('API key') || error.status === 401 || error.status === 403) {
         throw new Error(t.error_api_key_invalid);
     }
-    throw error;
+    
+    // Si es un error de cuota o seguridad de Google
+    if (error.message?.includes('quota') || error.message?.includes('limit')) {
+        throw new Error(lang === 'es' ? "Límite de cuota excedido en Google Cloud." : "API Quota exceeded.");
+    }
+
+    throw new Error(`${t.error_service_unavailable} (${error.message || 'Unknown error'})`);
   }
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
     const prompt = `Usted es un experto en Farmacología Clínica y razonamiento diagnóstico. 
     Analice la causa probable del síntoma: "${symptoms}". 
     
