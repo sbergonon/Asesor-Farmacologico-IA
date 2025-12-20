@@ -64,8 +64,13 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = (translations as any)[lang];
 
+  // Verificación preventiva de la clave para diagnóstico en consola
+  if (!process.env.API_KEY) {
+    console.error("CRITICAL: API_KEY is undefined or empty in process.env. Verify Render Environment Variables.");
+  }
+
   try {
-    // Inicialización siguiendo estrictamente la directriz de process.env.API_KEY
+    // Inicialización del cliente por cada llamada para asegurar frescura de configuración
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
 
@@ -103,7 +108,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
             drugPharmacogeneticContraindications = parsed.drugPharmacogeneticContraindications || [];
             beersCriteriaAlerts = parsed.beersCriteriaAlerts || [];
         } catch (e) {
-            console.error("Failed to parse AI JSON block");
+            console.error("Clinical Data Parse Error:", e);
         }
         textForDisplay = fullText.substring(endIndex + endMarker.length).trim();
     }
@@ -118,52 +123,59 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    console.error("Gemini Critical Error:", error);
-    // Si es un error de autenticación explícito de la API
-    if (error.message?.includes('API key') || error.status === 401 || error.status === 403) {
+    console.error("Gemini Service Error:", error);
+    
+    // Identificación específica de errores de autenticación/permisos
+    if (error.message?.includes('API key') || error.status === 401 || error.status === 403 || error.message?.includes('not found')) {
         throw new Error(t.error_api_key_invalid);
     }
+    
     throw new Error(t.error_service_unavailable);
   }
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const prompt = `Usted es un experto en Farmacología Clínica. Analice la causa probable del síntoma: "${symptoms}". 
-    
-    ESTRUCTURA:
-    1. Bloque JSON (Entre [CAUSALITY_DATA_START] y [CAUSALITY_DATA_END]): { matches: Array<{ cause, probability, mechanism }> }
-    2. Informe técnico Markdown después.
-    
-    Responda en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
-    
-    const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview", 
-        contents: prompt,
-        config: { 
-          systemInstruction: buildSystemInstruction(lang),
-          tools: [{ googleSearch: {} }] 
-        },
-    });
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const prompt = `Usted es un experto en Farmacología Clínica. Analice la causa probable del síntoma: "${symptoms}". 
+        
+        ESTRUCTURA:
+        1. Bloque JSON (Entre [CAUSALITY_DATA_START] y [CAUSALITY_DATA_END]): { matches: Array<{ cause, probability, mechanism }> }
+        2. Informe técnico Markdown después.
+        
+        Responda en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
+        
+        const response = await ai.models.generateContent({
+            model: "gemini-3-pro-preview", 
+            contents: prompt,
+            config: { 
+              systemInstruction: buildSystemInstruction(lang),
+              tools: [{ googleSearch: {} }] 
+            },
+        });
 
-    const fullText = response.text || "";
-    let matches = [];
-    let narrative = fullText;
+        const fullText = response.text || "";
+        let matches = [];
+        let narrative = fullText;
 
-    const startMarker = '[CAUSALITY_DATA_START]';
-    const endMarker = '[CAUSALITY_DATA_END]';
-    const startIndex = fullText.indexOf(startMarker);
-    const endIndex = fullText.indexOf(endMarker);
+        const startMarker = '[CAUSALITY_DATA_START]';
+        const endMarker = '[CAUSALITY_DATA_END]';
+        const startIndex = fullText.indexOf(startMarker);
+        const endIndex = fullText.indexOf(endMarker);
 
-    if (startIndex !== -1 && endIndex !== -1) {
-        const jsonStr = fullText.substring(startIndex + startMarker.length, endIndex).trim().replace(/```json|```/g, '');
-        try { matches = JSON.parse(jsonStr).matches || []; } catch(e) {}
-        narrative = fullText.substring(endIndex + endMarker.length).trim();
+        if (startIndex !== -1 && endIndex !== -1) {
+            const jsonStr = fullText.substring(startIndex + startMarker.length, endIndex).trim().replace(/```json|```/g, '');
+            try { matches = JSON.parse(jsonStr).matches || []; } catch(e) {}
+            narrative = fullText.substring(endIndex + endMarker.length).trim();
+        }
+
+        const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
+          .filter(chunk => chunk.web?.uri && chunk.web?.title)
+          .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
+
+        return { analysisText: narrative, sources, matches };
+    } catch (error: any) {
+        console.error("Investigator Service Error:", error);
+        throw error;
     }
-
-    const sources = (response.candidates?.[0]?.groundingMetadata?.groundingChunks || [])
-      .filter(chunk => chunk.web?.uri && chunk.web?.title)
-      .map(chunk => ({ uri: chunk.web!.uri!, title: chunk.web!.title! }));
-
-    return { analysisText: narrative, sources, matches };
 };
