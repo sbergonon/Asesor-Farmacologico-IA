@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import type { 
     AnalysisResult, 
@@ -15,6 +16,14 @@ const getSystemConfig = (): SystemSettings => {
         if (stored) return JSON.parse(stored);
     } catch(e) {}
     return { prioritySources: '', excludedSources: '', safetyStrictness: 'standard' };
+};
+
+const getApiKey = (): string => {
+  const key = process.env.API_KEY;
+  if (!key || String(key).trim() === "" || String(key) === "undefined" || String(key) === "null") {
+    return "";
+  }
+  return String(key).trim();
 };
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
@@ -60,9 +69,9 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = translations[lang];
-  const apiKey = process.env.API_KEY;
+  const apiKey = getApiKey();
   
-  if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined" || String(apiKey) === "null") {
+  if (!apiKey) {
     throw new Error(t.error_api_key_invalid);
   }
 
@@ -133,8 +142,8 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 };
 
 export const getDetailedInteractionInfo = async (findingTitle: string, medications: Medication[], conditions: string, lang: 'es' | 'en'): Promise<string> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") return "Error: API Key not configured.";
+    const apiKey = getApiKey();
+    if (!apiKey) return "Error: API Key not configured.";
     
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
@@ -145,8 +154,8 @@ export const getDetailedInteractionInfo = async (findingTitle: string, medicatio
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") throw new Error("API Key missing");
+    const apiKey = getApiKey();
+    if (!apiKey) throw new Error("API Key missing");
 
     const ai = new GoogleGenAI({ apiKey });
     const prompt = `Investigar síntoma: "${symptoms}" en relación a la medicación: ${medications.map(m => m.name).join(', ')}. Contexto adicional: Condiciones: ${conditions}, FN: ${dateOfBirth}, PGx: ${pharmacogenetics}. Responde el informe de análisis en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
@@ -159,8 +168,8 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
 };
 
 export const analyzeSupplementInteractions = async (supplementName: string, medications: Medication[], lang: 'es' | 'en'): Promise<SupplementInteraction[]> => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey || String(apiKey).trim() === "" || String(apiKey) === "undefined") return [];
+  const apiKey = getApiKey();
+  if (!apiKey) return [];
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -173,6 +182,6 @@ export const analyzeSupplementInteractions = async (supplementName: string, medi
     const cleaned = text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleaned);
   } catch (error: any) {
-    return []; // Fail silently for realtime supplement check to avoid UI disruption
+    return []; 
   }
 };

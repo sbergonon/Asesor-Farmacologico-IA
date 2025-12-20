@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
@@ -145,7 +146,21 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   };
 
   // Real-time analysis for supplements
-  const predefinedSubstances = [t.substance_st_johns_wort, t.substance_alcohol, t.substance_tobacco, t.substance_grapefruit_juice, t.substance_cranberry_juice];
+  const predefinedSubstances = [
+    t.substance_st_johns_wort, 
+    t.substance_alcohol, 
+    t.substance_tobacco, 
+    t.substance_grapefruit_juice, 
+    t.substance_cranberry_juice,
+    t.substance_melatonin,
+    t.substance_omega3,
+    t.substance_vitamin_d,
+    t.substance_magnesium,
+    t.substance_probiotics,
+    t.substance_collagen,
+    t.substance_mushrooms
+  ];
+  
   const activeSupplements = useMemo(() => {
     return otherSubstances.split(',').map(s => s.trim()).filter(Boolean);
   }, [otherSubstances]);
@@ -261,15 +276,15 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       {/* 5. Substances & Supplements */}
       <section className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200 dark:border-slate-700">
         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">{t.form_substances_label}</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-3 mb-6">
           {predefinedSubstances.map(s => (
-            <label key={s} className="flex items-center space-x-2 text-sm cursor-pointer hover:text-blue-600 transition-colors">
-              <input type="checkbox" checked={otherSubstances.includes(s)} onChange={(e) => {
+            <label key={s} className="flex items-center space-x-2 text-sm cursor-pointer hover:text-blue-600 transition-colors group">
+              <input type="checkbox" checked={otherSubstances.split(',').map(x => x.trim()).includes(s)} onChange={(e) => {
                 const current = otherSubstances.split(',').map(x => x.trim()).filter(Boolean);
                 const updated = e.target.checked ? [...current, s] : current.filter(x => x !== s);
                 setOtherSubstances(updated.join(', '));
-              }} className="rounded text-blue-600 focus:ring-blue-500" />
-              <span>{s}</span>
+              }} className="rounded text-blue-600 focus:ring-blue-500 bg-white dark:bg-slate-800" />
+              <span className="group-hover:translate-x-0.5 transition-transform">{s}</span>
             </label>
           ))}
         </div>
@@ -331,9 +346,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         <div className="relative">
           <input type="text" value={currentCondition} onChange={(e) => setCurrentCondition(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleAddCondition(currentCondition); } }} placeholder={t.form_conditions_placeholder} className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none dark:bg-slate-900" />
           {condSuggestions.length > 0 && (
-            <ul className="absolute z-[60] w-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl max-h-60 overflow-auto">
+            <ul className="absolute z-[60] w-full mt-1 bg-white dark:bg-slate-800 border-2 border-blue-100 dark:border-slate-700 rounded-lg shadow-2xl max-h-60 overflow-auto">
               {condSuggestions.map((s, i) => (
-                <li key={i} onClick={() => handleAddCondition(s)} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm font-medium border-b last:border-0 dark:border-slate-700">
+                <li key={i} onClick={() => handleAddCondition(s)} className="px-4 py-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer text-sm font-bold border-b last:border-0 dark:border-slate-700 transition-colors">
                   {s}
                 </li>
               ))}

@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import { 
@@ -60,13 +61,10 @@ const App: React.FC = () => {
   );
   const t = translations[lang];
 
-  // Dynamic API Key check helper
-  const checkApiKey = useCallback(() => {
+  // Helper function to check if API key exists and is valid (not "undefined" literal)
+  const isApiKeyConfigured = useCallback(() => {
     const key = process.env.API_KEY;
-    if (!key || String(key).trim() === "" || String(key) === "undefined" || String(key) === "null") {
-      return false;
-    }
-    return String(key).length > 5;
+    return !!key && String(key) !== "undefined" && String(key).trim() !== "";
   }, []);
 
   useEffect(() => {
@@ -119,8 +117,7 @@ const App: React.FC = () => {
   }, [user]);
   
   const handleAnalyze = useCallback(async () => {
-    // Dynamic verification on every click
-    if (!checkApiKey()) {
+    if (!isApiKeyConfigured()) {
       setIsApiKeyModalVisible(true);
       return;
     }
@@ -136,7 +133,6 @@ const App: React.FC = () => {
 
     setIsLoading(true);
     setError(null);
-    // Note: we don't necessarily clear analysisResult here to allow comparison if re-analyzing
 
     try {
       const result = await analyzeInteractions(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
@@ -157,7 +153,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, checkApiKey]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, isApiKeyConfigured]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -170,7 +166,6 @@ const App: React.FC = () => {
     setAnalysisResult(item.analysisResult);
     setAnalysisMode('individual');
     setActiveTab('form');
-    // Scroll to top to see loaded form
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
