@@ -48,28 +48,49 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
     - Datos de Edad (Edad/FN): ${dateOfBirth || 'No proporcionada'}
 
     TAREA: Realice un análisis de seguridad farmacológica exhaustivo.
-
-    ESTRUCTURA OBLIGATORIA DE RESPUESTA:
-    PARTE 1: BLOQUE JSON (Entre [INTERACTION_DATA_START] y [INTERACTION_DATA_END])
-    PARTE 2: INFORME CLÍNICO DETALLADO (Markdown)`;
+    ESTRUCTURA OBLIGATORIA: JSON (Interacciones) + Informe clínico narrativo.`;
 };
+
+// Función interna para realizar la llamada con reintento de modelo
+async function callGemini(prompt: string, lang: 'es' | 'en'): Promise<any> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const modelsToTry = ["gemini-3-pro-preview", "gemini-3-flash-preview"];
+    let lastError: any = null;
+
+    for (const modelName of modelsToTry) {
+        try {
+            console.debug(`Attempting clinical analysis with model: ${modelName}`);
+            const response = await ai.models.generateContent({
+                model: modelName,
+                contents: prompt,
+                config: {
+                    systemInstruction: buildSystemInstruction(lang),
+                    tools: [{ googleSearch: {} }]
+                },
+            });
+            return response;
+        } catch (error: any) {
+            lastError = error;
+            // Si el error es de cuota o modelo no encontrado, intentamos con el siguiente
+            const isNotFoundError = error.message?.includes('not found') || error.status === 404;
+            const isPermissionError = error.status === 403;
+            
+            if (isNotFoundError || isPermissionError) {
+                console.warn(`Model ${modelName} unavailable or restricted. Retrying with next model...`);
+                continue;
+            }
+            throw error; // Si es un error crítico (ej. 401), no reintentamos
+        }
+    }
+    throw lastError;
+}
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
   const t = (translations as any)[lang];
 
   try {
-    // Inicialización siguiendo la directriz de usar process.env.API_KEY directamente
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const prompt = buildPrompt(medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang);
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3-pro-preview", 
-      contents: prompt,
-      config: {
-        systemInstruction: buildSystemInstruction(lang),
-        tools: [{ googleSearch: {} }]
-      },
-    });
+    const response = await callGemini(prompt, lang);
 
     const fullText = response.text || "";
     let drugDrugInteractions = [];
@@ -96,7 +117,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
             drugPharmacogeneticContraindications = parsed.drugPharmacogeneticContraindications || [];
             beersCriteriaAlerts = parsed.beersCriteriaAlerts || [];
         } catch (e) {
-            console.warn("AI returned malformed JSON block, showing text only.");
+            console.error("Clinical JSON parsing failed.");
         }
         textForDisplay = fullText.substring(endIndex + endMarker.length).trim();
     }
@@ -111,35 +132,22 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications, drugPharmacogeneticContraindications, beersCriteriaAlerts 
     };
   } catch (error: any) {
-    // REGISTRO DETALLADO PARA EL USUARIO (Ver en F12)
-    console.group("DEBUG: Gemini API Failure");
-    console.error("Original Error Object:", error);
-    console.error("Error Message:", error.message);
-    console.error("Status Code:", error.status);
+    console.group("CRITICAL DIAGNOSTIC: Google API Error");
+    console.error("Status:", error.status);
+    console.error("Message:", error.message);
     console.groupEnd();
     
-    // Tratamiento específico de errores de autenticación
     if (error.message?.includes('API key') || error.status === 401 || error.status === 403 || error.message?.includes('not found')) {
         throw new Error(t.error_api_key_invalid);
     }
-    
     throw new Error(t.error_service_unavailable);
   }
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `Analice la causa probable del síntoma: "${symptoms}". Responda en ${lang === 'es' ? 'Español' : 'Inglés'}.`;
-        
-        const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview", 
-            contents: prompt,
-            config: { 
-              systemInstruction: buildSystemInstruction(lang),
-              tools: [{ googleSearch: {} }] 
-            },
-        });
+        const prompt = `Analice causas del síntoma: "${symptoms}".`;
+        const response = await callGemini(prompt, lang);
 
         const fullText = response.text || "";
         let matches = [];
@@ -162,7 +170,7 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
 
         return { analysisText: narrative, sources, matches };
     } catch (error: any) {
-        console.error("Investigator Error:", error);
+        console.error("Investigator Error Diagnosis:", error.status, error.message);
         throw error;
     }
 };
