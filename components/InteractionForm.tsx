@@ -1,24 +1,19 @@
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import Fuse from 'fuse.js';
 import { drugDatabase, type DrugInfo } from '../data/drugNames';
-import { supplementDatabase, type SupplementInfo } from '../data/supplements';
-import { pgxGeneGroups } from '../data/pgxGenes';
+import { drugSynonymMap } from '../data/drugSynonyms';
+import { criticalAllergyRules, criticalConditionRules, criticalDrugInteractionRules } from '../data/proactiveAlerts';
 import PlusIcon from './icons/PlusIcon';
 import TrashIcon from './icons/TrashIcon';
 import SparklesIcon from './icons/SparklesIcon';
-import SaveIcon from './icons/SaveIcon';
 import type { Medication, SupplementInteraction, ProactiveAlert } from '../types';
 import { analyzeSupplementInteractions, getDetailedInteractionInfo } from '../services/geminiService';
 import CheckCircleIcon from './icons/CheckCircleIcon';
 import AlertTriangleIcon from './icons/AlertTriangleIcon';
 import InfoCircleIcon from './icons/InfoCircleIcon';
-import { drugSynonymMap } from '../data/drugSynonyms';
-import ProBadge from './ProBadge';
-import { criticalAllergyRules, criticalConditionRules, criticalDrugInteractionRules } from '../data/proactiveAlerts';
-import MedicationItem from './MedicationItem';
-import ChevronDownIcon from './icons/ChevronDownIcon';
-// Added missing import for ArrowPathIcon
 import ArrowPathIcon from './icons/ArrowPathIcon';
+import MedicationItem from './MedicationItem';
 
 interface InteractionFormProps {
   patientId: string;
@@ -55,19 +50,16 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 interface DisplaySuggestion extends DrugInfo {
-  subtitle?: string;
-  source: 'local' | 'api';
-  matchScore: number;
-  matchedTerm?: string;
-  type?: 'generic' | 'brand';
-  genericName?: string;
+  source: 'local';
+  type: 'generic' | 'brand';
+  genericName: string;
 }
 
 const InteractionForm: React.FC<InteractionFormProps> = ({
   patientId, setPatientId, medications, setMedications, allergies, setAllergies, 
   otherSubstances, setOtherSubstances, pharmacogenetics, setPharmacogenetics, 
   conditions, setConditions, dateOfBirth, setDateOfBirth, onAnalyze, onClear, 
-  onSaveProfile, existingPatientIds, isLoading, isApiKeyMissing, onApiKeyError, t,
+  onSaveProfile, isLoading, t,
 }) => {
   const [currentMedication, setCurrentMedication] = useState('');
   const [suggestions, setSuggestions] = useState<DisplaySuggestion[]>([]);
@@ -78,7 +70,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const [explanations, setExplanations] = useState<Record<string, string>>({});
 
   const searchIndex = useMemo(() => {
-      const list = [];
+      const list: any[] = [];
       drugDatabase.forEach(d => list.push({ term: d.name, type: 'generic', genericName: d.name, data: d }));
       Object.entries(drugSynonymMap).forEach(([brand, generic]) => {
           const gInfo = drugDatabase.find(d => d.name.toLowerCase() === generic.toLowerCase()) || { name: generic };
@@ -87,17 +79,16 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       return list;
   }, []);
 
-  const fuse = useMemo(() => new Fuse(searchIndex, { keys: ['term'], threshold: 0.3 }), [searchIndex]);
+  const fuse = useMemo(() => new Fuse(searchIndex, { keys: ['term'], threshold: 0.35 }), [searchIndex]);
 
   useEffect(() => {
     if (debouncedMedSearch.length < 2) { setSuggestions([]); return; }
-    const results = fuse.search(debouncedMedSearch).slice(0, 10).map(r => ({
+    const results = fuse.search(debouncedMedSearch).slice(0, 8).map(r => ({
         ...r.item.data,
         name: r.item.type === 'brand' ? r.item.term : r.item.genericName,
         source: 'local',
         type: r.item.type,
         genericName: r.item.genericName,
-        matchScore: 1
     }));
     setSuggestions(results as any);
   }, [debouncedMedSearch, fuse]);
@@ -106,7 +97,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   const allergyTags = useMemo(() => allergies.split(',').map(a => a.trim()).filter(Boolean), [allergies]);
   
   const handleAddAllergy = () => {
-    if (currentAllergy.trim() && !allergyTags.includes(currentAllergy.trim())) {
+    if (currentAllergy.trim() && !allergyTags.some(a => a.toLowerCase() === currentAllergy.trim().toLowerCase())) {
         setAllergies([...allergyTags, currentAllergy.trim()].join(', '));
     }
     setCurrentAllergy('');
@@ -145,6 +136,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
     });
   }, [medications, customSupplements, checkedSubstances, fetchInteractionForSupplement]);
 
+  // Logic for LOCAL proactive alerts (Requires no API Key)
   const activeAlerts = useMemo<ProactiveAlert[]>(() => {
     const alerts: ProactiveAlert[] = [];
     const normalize = (name: string) => {
@@ -152,14 +144,14 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
         return drugSynonymMap[lower] ? drugSynonymMap[lower].toLowerCase() : lower;
     };
 
-    const medNames = medications.map(m => normalize(m.name));
+    const medNamesNorm = medications.map(m => normalize(m.name));
     const allergyList = allergies.toLowerCase().split(',').map(a => a.trim()).filter(Boolean);
     const conditionList = conditions.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
 
     // Allergies
     allergyList.forEach(a => {
         for (const group in criticalAllergyRules) {
-            if (a.includes(group)) {
+            if (a.includes(group) || group.includes(a)) {
                 medications.forEach(m => {
                     const normMed = normalize(m.name);
                     if (criticalAllergyRules[group].some(ruleMed => normalize(ruleMed) === normMed)) {
@@ -172,26 +164,29 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
     // Drug-Drug
     criticalDrugInteractionRules.forEach(rule => {
-        if (medNames.includes(normalize(rule.pair[0])) && medNames.includes(normalize(rule.pair[1]))) {
+        const drugA = normalize(rule.pair[0]);
+        const drugB = normalize(rule.pair[1]);
+        if (medNamesNorm.includes(drugA) && medNamesNorm.includes(drugB)) {
             alerts.push({ id: `ddi-${rule.pair.join('-')}`, type: 'drug-drug', title: t.ddi_alert_title, message: t.ddi_alert_text.replace('{med1}', rule.pair[0]).replace('{med2}', rule.pair[1]).replace('{reason}', t[rule.reasonKey] || rule.reasonKey) });
         }
     });
 
     // Condition
-    conditionList.forEach(c => {
-        for (const cond in criticalConditionRules) {
-            if (c.includes(cond)) {
-                const rule = criticalConditionRules[cond];
+    conditionList.forEach(userCond => {
+        for (const ruleCond in criticalConditionRules) {
+            // Permissive matching: "Renal" matches "Insuficiencia Renal"
+            if (userCond.includes(ruleCond) || ruleCond.includes(userCond)) {
+                const rule = criticalConditionRules[ruleCond];
                 medications.forEach(m => {
                     if (rule.drugs.some(d => normalize(d) === normalize(m.name))) {
-                        alerts.push({ id: `c-${m.name}-${cond}`, type: 'condition', title: t.condition_alert_title, message: t.condition_alert_text.replace('{medication}', m.name).replace('{condition}', cond).replace('{reason}', t[rule.reasonKey] || rule.reasonKey) });
+                        alerts.push({ id: `c-${m.name}-${ruleCond}`, type: 'condition', title: t.condition_alert_title, message: t.condition_alert_text.replace('{medication}', m.name).replace('{condition}', ruleCond).replace('{reason}', t[rule.reasonKey] || rule.reasonKey) });
                     }
                 });
             }
         }
     });
 
-    return alerts;
+    return Array.from(new Map(alerts.map(a => [a.id, a])).values()); // Deduplicate
   }, [medications, allergies, conditions, t]);
 
   const handleExplainFinding = async (findingId: string, title: string) => {
@@ -207,13 +202,13 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
   };
 
   const hasAnySupplements = [...customSupplements, ...Array.from(checkedSubstances)].length > 0;
-  const showRiskPanel = medications.length > 0;
+  const showRiskPanel = medications.length > 0 || conditions.length > 3;
 
   return (
     <div className="space-y-6">
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.form_patient_id_label}</label>
-        <input type="text" value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder={t.form_patient_id_placeholder} className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 sm:text-sm transition-all" />
+        <input type="text" value={patientId} onChange={(e) => setPatientId(e.target.value)} placeholder={t.form_patient_id_placeholder} className="block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:ring-blue-500 sm:text-sm" />
       </div>
       
       <div ref={autocompleteRef}>
@@ -225,15 +220,15 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
             onChange={(e) => setCurrentMedication(e.target.value)} 
             onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); if(currentMedication.trim()){ setMedications([...medications, { name: currentMedication.trim(), dosage: '', frequency: '' }]); setCurrentMedication(''); } } }}
             placeholder={t.form_medications_placeholder} 
-            className="flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md sm:text-sm transition-all" 
+            className="flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md sm:text-sm" 
           />
-          <button onClick={() => { if(currentMedication.trim()){ setMedications([...medications, { name: currentMedication.trim(), dosage: '', frequency: '' }]); setCurrentMedication(''); } }} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 active:scale-95 transition-all"><PlusIcon className="h-5 w-5" /></button>
+          <button onClick={() => { if(currentMedication.trim()){ setMedications([...medications, { name: currentMedication.trim(), dosage: '', frequency: '' }]); setCurrentMedication(''); } }} className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-all"><PlusIcon className="h-5 w-5" /></button>
           {suggestions.length > 0 && (
             <ul className="absolute top-full left-0 right-0 z-50 mt-1 max-h-60 overflow-auto bg-white dark:bg-slate-800 shadow-xl rounded-md py-1 border border-slate-200 dark:border-slate-700">
               {suggestions.map((s, idx) => (
                 <li key={idx} onClick={() => { setMedications([...medications, { name: s.name, dosage: s.commonDosage || '', frequency: s.commonFrequency || '' }]); setCurrentMedication(''); setSuggestions([]); }} className="px-4 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer text-sm flex flex-col">
                   <span className="font-bold">{s.name}</span> 
-                  {s.genericName && s.genericName !== s.name && <span className="text-[10px] text-slate-500 uppercase tracking-tighter">Genérico: {s.genericName}</span>}
+                  {s.genericName && s.genericName !== s.name && <span className="text-[10px] text-slate-500 uppercase">Genérico: {s.genericName}</span>}
                 </li>
               ))}
             </ul>
@@ -247,29 +242,17 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.form_allergies_label}</label>
         <div className="flex items-center space-x-2">
-            <input type="text" value={currentAllergy} onChange={(e) => setCurrentAllergy(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleAddAllergy(); } }} placeholder={t.form_allergies_placeholder} className="flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md sm:text-sm transition-all" />
+            <input type="text" value={currentAllergy} onChange={(e) => setCurrentAllergy(e.target.value)} onKeyDown={(e) => { if(e.key === 'Enter') { e.preventDefault(); handleAddAllergy(); } }} placeholder={t.form_allergies_placeholder} className="flex-grow block w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md sm:text-sm" />
             <button onClick={handleAddAllergy} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all"><PlusIcon className="h-5 w-5" /></button>
         </div>
         <div className="mt-2 flex flex-wrap gap-2">
-            {allergyTags.map(a => <span key={a} className="px-2 py-1 bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 text-xs rounded-full flex items-center border border-red-200 dark:border-red-800">{a}<button onClick={() => setAllergies(allergyTags.filter(x => x !== a).join(', '))} className="ml-1 hover:text-red-900"><TrashIcon className="h-3 w-3"/></button></span>)}
-        </div>
-      </div>
-
-      <div className="p-4 bg-slate-50 dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700">
-        <label className="block text-sm font-bold text-slate-800 dark:text-slate-200 mb-4">{t.form_substances_label}</label>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {predefinedSubstanceList.map(s => (
-            <label key={s} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 p-1 rounded transition-colors">
-              <input type="checkbox" checked={checkedSubstances.has(s)} onChange={(e) => { const n = new Set(checkedSubstances); if(e.target.checked) n.add(s); else n.delete(s); setOtherSubstances([...Array.from(n), ...customSupplements].join(', ')); }} className="rounded text-blue-600 focus:ring-blue-500" />
-              <span>{s}</span>
-            </label>
-          ))}
+            {allergyTags.map(a => <span key={a} className="px-2 py-1 bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200 text-xs rounded-full border border-red-200 dark:border-red-800 flex items-center">{a}<button onClick={() => setAllergies(allergyTags.filter(x => x !== a).join(', '))} className="ml-1 hover:text-red-900"><TrashIcon className="h-3 w-3"/></button></span>)}
         </div>
       </div>
 
       <div>
         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t.form_conditions_label}</label>
-        <input type="text" value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder={t.form_conditions_placeholder} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md transition-all focus:ring-blue-500" />
+        <input type="text" value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder={t.form_conditions_placeholder} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 rounded-md focus:ring-blue-500 outline-none" />
       </div>
 
       {showRiskPanel && (
@@ -284,7 +267,7 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
               {activeAlerts.length === 0 && !hasAnySupplements && (
                   <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center text-xs text-slate-500 italic">
                       <CheckCircleIcon className="h-4 w-4 mr-2 text-green-500" />
-                      No se detectan riesgos críticos directos entre los fármacos y condiciones actuales.
+                      No se detectan riesgos críticos directos inmediatos.
                   </div>
               )}
 
@@ -302,9 +285,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                    <button 
                     onClick={() => handleExplainFinding(alert.id, alert.title + ": " + alert.message)} 
                     disabled={explainingId === alert.id}
-                    className="flex-shrink-0 text-[10px] font-bold bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                    className="flex-shrink-0 text-[10px] font-bold bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
                    >
-                       {explainingId === alert.id ? <><ArrowPathIcon className="h-3 w-3 animate-spin inline mr-1"/>...</> : explanations[alert.id] ? "Ocultar" : "IA Info"}
+                       {explainingId === alert.id ? <ArrowPathIcon className="h-3 w-3 animate-spin" /> : explanations[alert.id] ? "Ocultar" : "IA Info"}
                    </button>
                 </div>
               ))}
@@ -312,8 +295,8 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
               {[...customSupplements, ...Array.from(checkedSubstances)].map(sup => {
                  const cache = supplementInteractionCache[sup];
                  if (!cache) return null;
-                 if (cache.status === 'loading') return <div key={sup} className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-100 dark:border-slate-700 animate-pulse rounded-lg text-xs italic text-slate-400">Analizando {sup}...</div>;
-                 if (cache.status === 'error') return <div key={sup} className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-xs text-amber-700 dark:text-amber-300 flex items-center"><AlertTriangleIcon className="h-4 w-4 mr-2"/> Error al analizar {sup}: {cache.error?.includes('API key') ? 'Clave API inválida' : 'Servicio no disponible'}</div>;
+                 if (cache.status === 'loading') return <div key={sup} className="p-3 bg-slate-50 dark:bg-slate-800/30 border border-slate-100 animate-pulse rounded-lg text-xs italic text-slate-400">Analizando {sup}...</div>;
+                 if (cache.status === 'error') return <div key={sup} className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 rounded-lg text-xs text-amber-700 dark:text-amber-300 flex items-center"><AlertTriangleIcon className="h-4 w-4 mr-2"/> Error al analizar {sup} (Requiere Clave API)</div>;
                  
                  return cache.data.length > 0 ? cache.data.map((int: any, idx: number) => (
                     <div key={`${sup}-${idx}`} className="p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-sm">
@@ -321,9 +304,9 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
                         <p className="text-xs text-slate-600 dark:text-slate-400 mt-1"><strong>{int.riskLevel}:</strong> {int.potentialEffects}</p>
                     </div>
                  )) : (
-                     <div key={sup} className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center text-xs text-slate-500 italic">
+                     <div key={sup} className="p-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 rounded-lg flex items-center text-xs text-slate-500 italic">
                         <InfoCircleIcon className="h-4 w-4 mr-2 text-blue-500" />
-                        No se detectaron interacciones significativas para {sup}.
+                        No se detectaron riesgos entre {sup} y la medicación actual.
                     </div>
                  );
               })}

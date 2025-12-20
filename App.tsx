@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { analyzeInteractions } from './services/geminiService';
 import { 
@@ -26,7 +27,6 @@ import { translations } from './lib/translations';
 import DashboardPanel from './components/DashboardPanel';
 import InvestigatorPanel from './components/InvestigatorPanel';
 import AdminPanel from './components/AdminPanel';
-// Added missing import for ProBadge
 import ProBadge from './components/ProBadge';
 
 type AnalysisMode = 'individual' | 'batch';
@@ -53,7 +53,6 @@ const App: React.FC = () => {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('individual');
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-  const [isApiKeyMissing, setIsApiKeyMissing] = useState(false);
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
   
@@ -64,12 +63,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const apiKey = process.env.API_KEY;
-    // Solo mostramos el modal si detectamos activamente que falta, pero dejamos que Gemini falle si prefiere
-    if (!apiKey || apiKey === "undefined") {
-      setIsApiKeyMissing(true);
-    } else {
-      setIsApiKeyMissing(false);
-      setIsApiKeyModalVisible(false);
+    if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
+      // No bloqueamos la UI, dejamos que InteractionForm trabaje localmente
+      // Pero podemos avisar si el usuario intenta un análisis de IA
     }
   }, []);
 
@@ -122,11 +118,13 @@ const App: React.FC = () => {
     }
   }, [user]);
   
-  const handleApiKeyError = useCallback(() => {
-    setIsApiKeyModalVisible(true);
-  }, []);
-
   const handleAnalyze = useCallback(async () => {
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
+      setIsApiKeyModalVisible(true);
+      return;
+    }
+
     if (medications.length === 0) {
       setError(t.error_add_medication);
       return;
@@ -152,14 +150,14 @@ const App: React.FC = () => {
     } catch (e: any) {
       if (e.message.includes('API key')) {
         setError(t.error_api_key_invalid);
-        handleApiKeyError();
+        setIsApiKeyModalVisible(true);
       } else {
         setError(e.message || t.error_unexpected);
       }
     } finally {
       setIsLoading(false);
     }
-  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem, handleApiKeyError]);
+  }, [medications, allergies, otherSubstances, conditions, dateOfBirth, pharmacogenetics, lang, t, patientId, addHistoryItem]);
 
   const handleLoadHistory = useCallback((item: HistoryItem) => {
     setMedications(item.medications);
@@ -230,8 +228,8 @@ const App: React.FC = () => {
                               conditions={conditions} setConditions={setConditions}
                               dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
                               onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
-                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={isApiKeyMissing}
-                              onApiKeyError={handleApiKeyError} t={t}
+                              existingPatientIds={existingPatientIds} isLoading={isLoading} isApiKeyMissing={false}
+                              onApiKeyError={() => setIsApiKeyModalVisible(true)} t={t}
                           />
                       </div>
                       {error && <div className="mt-6 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg animate-fade-in"><p className="font-bold">{t.error_title}</p><p>{error}</p></div>}
