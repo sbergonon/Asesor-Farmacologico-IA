@@ -10,31 +10,32 @@ import type {
 import { translations } from '../lib/translations';
 
 /**
- * Valida la clave API y detecta si es un valor de marcador de posición.
+ * Obtiene la clave de process.env.API_KEY y valida que no sea un marcador de posición.
  */
 const getValidatedApiKey = (lang: 'es' | 'en'): string => {
     const rawKey = process.env.API_KEY;
     const t = (translations as any)[lang];
 
-    // Diagnóstico detallado para el usuario en consola
-    console.log(`[DEBUG] Clave detectada: ${rawKey ? rawKey.substring(0, 4) : 'NULL'}... (Longitud: ${rawKey?.length || 0})`);
+    // Diagnóstico para F12
+    console.log(`[SISTEMA] Clave detectada: "${rawKey?.substring(0, 5)}..." (Longitud: ${rawKey?.length})`);
 
-    // 1. Verificar si es indefinida o vacía
+    // 1. Caso: No existe
     if (!rawKey || rawKey === 'undefined' || rawKey.trim() === '') {
-        throw new Error(t.error_api_key_invalid + " (Causa: Variable API_KEY no definida en Render)");
+        throw new Error(t.error_api_key_invalid + " (Causa: Variable API_KEY no detectada)");
     }
 
-    // 2. Detectar específicamente el string de marcador de posición del sistema
+    // 2. Caso: Marcador de posición (PLACEHOLDER_API_KEY)
+    // Si esto ocurre, Render está ignorando la variable del panel y usando un .env viejo.
     if (rawKey.includes('PLACEHOLDER')) {
-        console.error("ERROR: El sistema está usando 'PLACEHOLDER_API_KEY'. Render no ha sobrescrito la variable.");
-        throw new Error(t.error_api_key_invalid + " (Causa: El sistema detecta un valor PLACEHOLDER. Revise las variables en Render y haga 'Clear Cache and Deploy')");
+        console.error("ERROR CRÍTICO: Se está usando un valor PLACEHOLDER. Render no ha sobrescrito el archivo .env.");
+        throw new Error("ERROR DE COMPILACIÓN: El sistema está usando una clave de prueba 'PLACEHOLDER'. Por favor, en Render ve a 'Manual Deploy' y selecciona 'Clear Cache and Deploy' para forzar la lectura de tu clave real.");
     }
 
     const cleaned = rawKey.trim().replace(/^["']|["']$/g, '');
 
-    // 3. Validar formato real de Google
+    // 3. Caso: Formato incorrecto
     if (!cleaned.startsWith('AIza')) {
-        throw new Error(t.error_api_key_invalid + " (Causa: La clave no empieza por AIza)");
+        throw new Error(t.error_api_key_invalid + ` (Causa: Formato inválido. Empieza por ${cleaned.substring(0, 4)})`);
     }
 
     return cleaned;
@@ -50,41 +51,38 @@ const getSystemConfig = (): SystemSettings => {
 
 const buildSystemInstruction = (lang: 'es' | 'en'): string => {
     const config = getSystemConfig();
-    const priority = config.prioritySources ? `PRIORITIZE medical information from: ${config.prioritySources}.` : '';
-    const excluded = config.excludedSources ? `STRICTLY EXCLUDE: ${config.excludedSources}.` : '';
-    
     return `You are a Clinical Pharmacologist. 
-    ${priority} ${excluded}
+    Focus on evidence-based drug safety.
     Respond in ${lang === 'es' ? 'Spanish' : 'English'}.
-    Focus on evidence-based drug interactions and safety.`;
+    Priority sources: ${config.prioritySources}.`;
 };
 
 async function callGemini(prompt: string, lang: 'es' | 'en'): Promise<any> {
-    // La clave se valida en cada llamada para reaccionar a cambios en el entorno
     const apiKey = getValidatedApiKey(lang);
     const ai = new GoogleGenAI({ apiKey });
     
-    // Intentar con el modelo pro primero, luego flash como backup
-    const models = ["gemini-3-pro-preview", "gemini-3-flash-preview"];
-    let lastErr;
-
-    for (const model of models) {
-        try {
+    // Intentar siempre con el modelo más capaz
+    try {
+        return await ai.models.generateContent({
+            model: "gemini-3-pro-preview",
+            contents: prompt,
+            config: {
+                systemInstruction: buildSystemInstruction(lang),
+                tools: [{ googleSearch: {} }]
+            },
+        });
+    } catch (error: any) {
+        console.error("Error en llamada a IA:", error);
+        // Si el modelo pro falla por cuota o disponibilidad, intentar con flash
+        if (error.status === 404 || error.status === 429) {
             return await ai.models.generateContent({
-                model,
+                model: "gemini-3-flash-preview",
                 contents: prompt,
-                config: {
-                    systemInstruction: buildSystemInstruction(lang),
-                    tools: [{ googleSearch: {} }]
-                },
+                config: { systemInstruction: buildSystemInstruction(lang) },
             });
-        } catch (e: any) {
-            lastErr = e;
-            if (e.status === 404 || e.status === 403) continue;
-            throw e;
         }
+        throw error;
     }
-    throw lastErr;
 }
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
@@ -92,13 +90,11 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
 
   try {
     const medList = medications.map(m => `${m.name} (${m.dosage}, ${m.frequency})`).join('; ');
-    const prompt = `Analice la seguridad farmacológica para este paciente:
-      - Medicamentos: ${medList}
-      - Alergias: ${allergies || 'Ninguna'}
-      - Suplementos: ${otherSubstances || 'Ninguno'}
-      - Farmacogenética: ${pharmacogenetics || 'N/A'}
-      - Condiciones: ${conditions}
-      - FN: ${dateOfBirth || 'N/A'}`;
+    const prompt = `Analice este perfil clínico:
+      - Medicación: ${medList}
+      - Alergias: ${allergies}
+      - Diagnósticos: ${conditions}
+      - Suplementos: ${otherSubstances}`;
 
     const response = await callGemini(prompt, lang);
     const text = response.text || "";
@@ -113,14 +109,15 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
         drugConditionContraindications: [], drugPharmacogeneticContraindications: [], beersCriteriaAlerts: [] 
     };
   } catch (error: any) {
-    console.error("Error clínico:", error);
-    if (error.message?.includes('PLACEHOLDER') || error.status === 400) throw new Error(t.error_api_key_invalid);
+    console.error("Error en servicio clínico:", error);
+    if (error.message?.includes('COMPILACIÓN')) throw error;
+    if (error.status === 400) throw new Error(t.error_api_key_invalid);
     throw new Error(t.error_service_unavailable);
   }
 };
 
 export const investigateSymptoms = async (symptoms: string, medications: Medication[], conditions: string, dateOfBirth: string, pharmacogenetics: string, allergies: string, lang: 'es' | 'en'): Promise<InvestigatorResult> => {
-    const prompt = `Investigue si el síntoma "${symptoms}" puede ser un efecto adverso del tratamiento actual.`;
+    const prompt = `Investigue si "${symptoms}" es un efecto adverso de: ${medications.map(m => m.name).join(', ')}`;
     const response = await callGemini(prompt, lang);
     return { analysisText: response.text || "", sources: [], matches: [] };
 };
