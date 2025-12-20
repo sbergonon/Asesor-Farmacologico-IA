@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import type { SystemSettings, UserProfile, UserRole } from '../types';
 import SaveIcon from './icons/SaveIcon';
@@ -23,8 +24,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
   const [activeTab, setActiveTab] = useState<Tab>('settings');
   
   const [settings, setSettings] = useState<SystemSettings>({
-    prioritySources: 'nih.gov, mayoclinic.org, drugs.com, medscape.com',
-    excludedSources: 'wikipedia.org, social media',
+    prioritySources: 'nih.gov, mayoclinic.org, drugs.com, medscape.com, pubmed.ncbi.nlm.nih.gov, google-dns.com',
+    excludedSources: 'wikipedia.org, social media, forums.desire.com',
     safetyStrictness: 'standard',
     integrations: [
         { id: '1', name: 'Servidor FHIR Principal', type: 'EHR', protocol: 'FHIR', endpoint: 'https://fhir.hospital.org/v4', status: 'inactive' },
@@ -150,6 +151,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
                     sourcesString={settings.prioritySources}
                     onChange={(val) => handleSettingsChange('prioritySources', val)}
                     variant="priority"
+                    t={t}
                   />
                   <SourceManager 
                     title="Fuentes Excluidas"
@@ -158,6 +160,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ t }) => {
                     onChange={(val) => handleSettingsChange('excludedSources', val)}
                     variant="excluded"
                     placeholder="ej: wikipedia.org"
+                    t={t}
                   />
               </div>
 

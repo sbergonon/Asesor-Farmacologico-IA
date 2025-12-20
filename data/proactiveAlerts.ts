@@ -1,40 +1,43 @@
-// This file contains rules for the Proactive Alert system.
-// These are well-known, high-risk interactions that should trigger an immediate warning to the user.
-// All drug/condition/allergy names should be in lowercase for case-insensitive matching.
 
-// Rule set for critical allergies and cross-reactivities.
-// Key: a keyword for an allergy group.
-// Value: an array of lowercase drug names belonging to that group.
+// Reglas para el sistema de Alertas Proactivas (Detección en Tiempo Real)
+// Se deben usar nombres genéricos en minúsculas.
+
 export const criticalAllergyRules: Record<string, string[]> = {
-  'penicillin': ['amoxicillin', 'ampicillin', 'piperacillin', 'dicloxacillin', 'cephalexin'], // Cephalexin for cross-reactivity
-  'sulfa': ['sulfamethoxazole/trimethoprim', 'sulfasalazine', 'sulfadiazine'],
-  'nsaid': ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'aspirin', 'meloxicam', 'celecoxib'],
-  'aine': ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'aspirin', 'meloxicam', 'celecoxib'], // Spanish acronym for NSAID
+  'penicil': ['amoxicillin', 'ampicillin', 'piperacillin', 'dicloxacillin', 'cephalexin', 'amoxicilina'],
+  'penicillin': ['amoxicillin', 'ampicillin', 'piperacillin', 'dicloxacillin', 'cephalexin', 'amoxicilina'],
+  'sulfa': ['sulfamethoxazole/trimethoprim', 'sulfasalazine', 'sulfadiazine', 'bactrim'],
+  'nsaid': ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'aspirin', 'meloxicam', 'celecoxib', 'dexketoprofen', 'ibuprofeno', 'naproxeno'],
+  'aine': ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'aspirin', 'meloxicam', 'celecoxib', 'dexketoprofen', 'ibuprofeno', 'naproxeno'],
+  'aspirin': ['aspirin', 'adiro', 'tromalyt', 'ácido acetilsalicílico'],
+  'aspro': ['aspirin', 'adiro', 'tromalyt', 'ácido acetilsalicílico'],
 };
 
-// Rule set for critical drug-condition contraindications.
-// Key: a keyword for a medical condition.
-// Value: an object with `drugs` (array of lowercase drug names) and `reasonKey` (for translation).
 export const criticalConditionRules: Record<string, { drugs: string[], reasonKey: string }> = {
-  'kidney disease': {
-    drugs: ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac'],
+  'kidney': {
+    drugs: ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'meloxicam', 'celecoxib'],
     reasonKey: 'reason_nsaids_renal'
   },
-  'insuficiencia renal': {
-    drugs: ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac'],
+  'renal': {
+    drugs: ['ibuprofen', 'naproxen', 'diclofenac', 'ketorolac', 'meloxicam', 'celecoxib'],
     reasonKey: 'reason_nsaids_renal'
   },
   'angioedema': {
-    drugs: ['lisinopril', 'enalapril', 'ramipril', 'captopril'],
+    drugs: ['lisinopril', 'enalapril', 'ramipril', 'captopril', 'perindopril'],
     reasonKey: 'reason_acei_angioedema'
   },
 };
 
-// Rule set for critical drug-drug interactions.
-// Each rule is an object with `pair` (an array of two lowercase drug names) and `reasonKey`.
 export const criticalDrugInteractionRules: { pair: string[], reasonKey: string }[] = [
   {
     pair: ['sildenafil', 'nitroglycerin'],
+    reasonKey: 'reason_sildenafil_nitrates'
+  },
+  {
+    pair: ['vardenafil', 'nitroglycerin'],
+    reasonKey: 'reason_sildenafil_nitrates'
+  },
+  {
+    pair: ['tadalafil', 'nitroglycerin'],
     reasonKey: 'reason_sildenafil_nitrates'
   },
   {

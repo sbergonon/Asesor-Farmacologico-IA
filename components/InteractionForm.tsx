@@ -127,26 +127,77 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
 
   const activeAlerts = useMemo<ProactiveAlert[]>(() => {
     const alerts: ProactiveAlert[] = [];
-    const medNames = medications.map(m => m.name.toLowerCase());
+    
+    // Función para resolver una marca a su genérico para las reglas proactivas
+    const resolveToGeneric = (name: string) => {
+      const lower = name.toLowerCase();
+      // Primero buscar en el mapa de sinónimos
+      const fromMap = drugSynonymMap[lower];
+      if (fromMap) return fromMap.toLowerCase();
+      return lower;
+    };
+
+    const resolvedMeds = medications.map(m => resolveToGeneric(m.name));
     const allergyList = allergies.toLowerCase().split(',').map(a => a.trim()).filter(Boolean);
-    allergyList.forEach(a => {
-      for (const group in criticalAllergyRules) {
-        if (a.includes(group)) {
-          medications.forEach(m => {
-            if (criticalAllergyRules[group].includes(m.name.toLowerCase())) {
-              alerts.push({ id: `a-${m.name}`, type: 'allergy', title: t.allergy_alert_title, message: t.allergy_alert_text.replace('{medication}', m.name).replace('{allergyGroup}', group) });
+    const conditionList = conditions.toLowerCase().split(',').map(c => c.trim()).filter(Boolean);
+
+    // 1. Alergias Críticas
+    allergyList.forEach(userAllergy => {
+      for (const groupKey in criticalAllergyRules) {
+        // Coincidencia flexible para el término de alergia (ej: 'penicil' coincide con 'penicilina')
+        if (userAllergy.includes(groupKey) || groupKey.includes(userAllergy)) {
+          medications.forEach((m, idx) => {
+            const gen = resolvedMeds[idx];
+            if (criticalAllergyRules[groupKey].some(ruleDrug => gen.includes(ruleDrug.toLowerCase()))) {
+              alerts.push({ 
+                id: `a-${m.name}-${groupKey}`, 
+                type: 'allergy', 
+                title: t.allergy_alert_title, 
+                message: t.allergy_alert_text.replace('{medication}', m.name).replace('{allergyGroup}', groupKey) 
+              });
             }
           });
         }
       }
     });
-    criticalDrugInteractionRules.forEach(rule => {
-      if (medNames.includes(rule.pair[0]) && medNames.includes(rule.pair[1])) {
-        alerts.push({ id: `ddi-${rule.pair.join('-')}`, type: 'drug-drug', title: t.ddi_alert_title, message: t.ddi_alert_text.replace('{med1}', rule.pair[0]).replace('{med2}', rule.pair[1]).replace('{reason}', t[rule.reasonKey] || rule.reasonKey) });
+
+    // 2. Contraindicaciones por Condición
+    conditionList.forEach(userCondition => {
+      for (const conditionKey in criticalConditionRules) {
+        if (userCondition.includes(conditionKey) || conditionKey.includes(userCondition)) {
+          medications.forEach((m, idx) => {
+            const gen = resolvedMeds[idx];
+            const rule = criticalConditionRules[conditionKey];
+            if (rule.drugs.some(d => gen.includes(d.toLowerCase()))) {
+              alerts.push({
+                id: `c-${m.name}-${conditionKey}`,
+                type: 'condition',
+                title: t.condition_alert_title,
+                message: t.condition_alert_text.replace('{medication}', m.name).replace('{condition}', conditionKey).replace('{reason}', t[rule.reasonKey] || rule.reasonKey)
+              });
+            }
+          });
+        }
       }
     });
+
+    // 3. Interacciones Fármaco-Fármaco
+    criticalDrugInteractionRules.forEach(rule => {
+      const idx1 = resolvedMeds.findIndex(m => m.includes(rule.pair[0].toLowerCase()));
+      const idx2 = resolvedMeds.findIndex(m => m.includes(rule.pair[1].toLowerCase()));
+      
+      if (idx1 !== -1 && idx2 !== -1) {
+        alerts.push({ 
+          id: `ddi-${rule.pair.join('-')}`, 
+          type: 'drug-drug', 
+          title: t.ddi_alert_title, 
+          message: t.ddi_alert_text.replace('{med1}', medications[idx1].name).replace('{med2}', medications[idx2].name).replace('{reason}', t[rule.reasonKey] || rule.reasonKey) 
+        });
+      }
+    });
+
     return alerts;
-  }, [medications, allergies, t]);
+  }, [medications, allergies, conditions, t]);
 
   return (
     <div className="space-y-8">
@@ -299,14 +350,13 @@ const InteractionForm: React.FC<InteractionFormProps> = ({
       </section>
 
       {/* Real-time Risk Panel */}
-      {(medications.length > 0 || activeAlerts.length > 0) && (
+      {activeAlerts.length > 0 && (
         <div className="p-5 bg-white dark:bg-slate-900 border-2 border-amber-100 dark:border-amber-900/30 rounded-2xl shadow-sm animate-fade-in">
           <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 flex items-center mb-4">
             <AlertTriangleIcon className="h-6 w-6 mr-2 text-amber-500" />
             {t.realtime_risk_panel_title}
           </h3>
           <div className="space-y-4">
-            {activeAlerts.length === 0 && <p className="text-xs text-slate-400 italic">Analizando posibles riesgos proactivos...</p>}
             {activeAlerts.map(alert => (
               <div key={alert.id} className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/40 rounded-xl">
                 <h4 className="font-bold text-red-700 dark:text-red-400 text-sm">{alert.title}</h4>

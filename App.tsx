@@ -56,14 +56,27 @@ const App: React.FC = () => {
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(false);
   
-  const [lang] = useState<'es' | 'en'>(
-    navigator.language.split('-')[0] === 'es' ? 'es' : 'en'
-  );
+  const [lang, setLang] = useState<'es' | 'en'>(() => {
+    const saved = localStorage.getItem('user_lang');
+    if (saved === 'es' || saved === 'en') return saved as 'es' | 'en';
+    return navigator.language.split('-')[0] === 'es' ? 'es' : 'en';
+  });
+  
   const t = translations[lang];
 
+  const handleLangChange = (newLang: 'es' | 'en') => {
+    setLang(newLang);
+    localStorage.setItem('user_lang', newLang);
+  };
+
   const isApiKeyConfigured = useCallback(() => {
-    const key = process.env.API_KEY;
-    return !!key && key !== "undefined" && String(key).trim() !== "";
+    try {
+      // @ts-ignore
+      const key = typeof process !== 'undefined' ? process.env.API_KEY : null;
+      return !!key && key !== "undefined" && key !== "null" && String(key).trim() !== "";
+    } catch (e) {
+      return false;
+    }
   }, []);
 
   useEffect(() => {
@@ -196,57 +209,69 @@ const App: React.FC = () => {
   const existingPatientIds = useMemo(() => new Set(patientProfiles.map(p => p.id)), [patientProfiles]);
 
   if (authLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div></div>;
-  if (!user) return <Login t={t} />;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex flex-col font-sans transition-colors">
       {isApiKeyModalVisible && <ApiKeyModal t={t} onClose={() => setIsApiKeyModalVisible(false)} />}
       <div className="container mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-8 flex-grow">
-        <Header appName={t.appName} appDescription={t.appDescription} />
-        <Disclaimer t={t} />
-        <div className="mt-6 sm:mt-8"><TabSelector activeTab={activeTab} setActiveTab={setActiveTab} t={t} /></div>
-        <main className="mt-4 sm:mt-6">
-            {!isDataLoading && activeTab === 'form' && (
-              <>
-                <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg max-w-sm mx-auto">
-                  <button onClick={() => setAnalysisMode('individual')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'individual' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_individual}</button>
-                  <button onClick={() => permissions.canAccessBatchAnalysis && setAnalysisMode('batch')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'batch' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_batch} {permissions.canAccessBatchAnalysis && <ProBadge />}</button>
-                </div>
-                {analysisMode === 'individual' ? (
-                  <div>
-                      <div className="bg-white dark:bg-slate-800/50 p-4 md:p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
-                          <InteractionForm
-                              patientId={patientId} setPatientId={setPatientId}
-                              medications={medications} setMedications={setMedications}
-                              allergies={allergies} setAllergies={setAllergies}
-                              otherSubstances={otherSubstances} setOtherSubstances={setOtherSubstances}
-                              pharmacogenetics={pharmacogenetics} setPharmacogenetics={setPharmacogenetics}
-                              conditions={conditions} setConditions={setConditions}
-                              dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
-                              onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
-                              isLoading={isLoading} t={t}
+        <Header 
+          appName={t.appName} 
+          appDescription={t.appDescription} 
+          currentLang={lang} 
+          onLangChange={handleLangChange} 
+          t={t} 
+        />
+        
+        {!user ? (
+          <Login t={t} />
+        ) : (
+          <>
+            <Disclaimer t={t} />
+            <div className="mt-6 sm:mt-8"><TabSelector activeTab={activeTab} setActiveTab={setActiveTab} t={t} /></div>
+            <main className="mt-4 sm:mt-6">
+                {!isDataLoading && activeTab === 'form' && (
+                  <>
+                    <div className="mb-6 flex justify-center p-1 bg-slate-200 dark:bg-slate-700/50 rounded-lg max-w-sm mx-auto">
+                      <button onClick={() => setAnalysisMode('individual')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'individual' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_individual}</button>
+                      <button onClick={() => permissions.canAccessBatchAnalysis && setAnalysisMode('batch')} className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md w-1/2 transition-all ${analysisMode === 'batch' ? 'bg-white dark:bg-slate-800 text-blue-600 shadow-sm' : 'text-slate-600'}`}>{t.mode_batch} {permissions.canAccessBatchAnalysis && <ProBadge />}</button>
+                    </div>
+                    {analysisMode === 'individual' ? (
+                      <div>
+                          <div className="bg-white dark:bg-slate-800/50 p-4 md:p-6 rounded-xl shadow-lg border border-slate-200 dark:border-slate-700">
+                              <InteractionForm
+                                  patientId={patientId} setPatientId={setPatientId}
+                                  medications={medications} setMedications={setMedications}
+                                  allergies={allergies} setAllergies={setAllergies}
+                                  otherSubstances={otherSubstances} setOtherSubstances={setOtherSubstances}
+                                  pharmacogenetics={pharmacogenetics} setPharmacogenetics={setPharmacogenetics}
+                                  conditions={conditions} setConditions={setConditions}
+                                  dateOfBirth={dateOfBirth} setDateOfBirth={setDateOfBirth}
+                                  onAnalyze={handleAnalyze} onClear={handleClear} onSaveProfile={handleSaveOrUpdateProfile}
+                                  isLoading={isLoading} t={t}
+                              />
+                          </div>
+                          {error && <div className="mt-6 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg animate-fade-in"><p className="font-bold">{t.error_title}</p><p>{error}</p></div>}
+                          <ResultDisplay 
+                            isLoading={isLoading} 
+                            analysisResult={analysisResult} 
+                            medications={medications}
+                            patientId={patientId}
+                            dob={dateOfBirth}
+                            conditions={conditions}
+                            t={t} 
                           />
                       </div>
-                      {error && <div className="mt-6 p-4 bg-red-100 dark:bg-red-900/50 border border-red-400 dark:border-red-800 text-red-700 dark:text-red-300 rounded-lg animate-fade-in"><p className="font-bold">{t.error_title}</p><p>{error}</p></div>}
-                      <ResultDisplay 
-                        isLoading={isLoading} 
-                        analysisResult={analysisResult} 
-                        medications={medications}
-                        patientId={patientId}
-                        dob={dateOfBirth}
-                        conditions={conditions}
-                        t={t} 
-                      />
-                  </div>
-                ) : <BatchAnalysis t={t} lang={lang} onViewResult={handleLoadHistory} onAnalysisComplete={addHistoryItem} />}
-              </>
-            )}
-            {!isDataLoading && activeTab === 'patients' && <PatientPanel profiles={patientProfiles} onLoadProfile={handleLoadProfile} onDeleteProfile={(id) => dbDeleteProfile(user.uid, id)} t={t} />}
-            {!isDataLoading && activeTab === 'investigator' && <InvestigatorPanel medications={medications} conditions={conditions} dateOfBirth={dateOfBirth} pharmacogenetics={pharmacogenetics} allergies={allergies} t={t} lang={lang} />}
-            {!isDataLoading && activeTab === 'history' && <HistoryPanel history={history} onLoadHistory={(id) => { const item = history.find(h => h.id === id); if (item) handleLoadHistory(item); }} onClearHistory={() => dbClearHistory(user.uid)} t={t} />}
-            {!isDataLoading && activeTab === 'dashboard' && <DashboardPanel history={history} t={t} />}
-            {!isDataLoading && activeTab === 'admin' && <AdminPanel t={t} />}
-        </main>
+                    ) : <BatchAnalysis t={t} lang={lang} onViewResult={handleLoadHistory} onAnalysisComplete={addHistoryItem} />}
+                  </>
+                )}
+                {!isDataLoading && activeTab === 'patients' && <PatientPanel profiles={patientProfiles} onLoadProfile={handleLoadProfile} onDeleteProfile={(id) => dbDeleteProfile(user.uid, id)} t={t} />}
+                {!isDataLoading && activeTab === 'investigator' && <InvestigatorPanel medications={medications} conditions={conditions} dateOfBirth={dateOfBirth} pharmacogenetics={pharmacogenetics} allergies={allergies} t={t} lang={lang} />}
+                {!isDataLoading && activeTab === 'history' && <HistoryPanel history={history} onLoadHistory={(id) => { const item = history.find(h => h.id === id); if (item) handleLoadHistory(item); }} onClearHistory={() => dbClearHistory(user.uid)} t={t} />}
+                {!isDataLoading && activeTab === 'dashboard' && <DashboardPanel history={history} t={t} />}
+                {!isDataLoading && activeTab === 'admin' && <AdminPanel t={t} />}
+            </main>
+          </>
+        )}
       </div>
       <footer className="mt-12 py-6 bg-slate-100 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-800 text-center text-[10px] md:text-sm text-slate-500">
           <div className="container mx-auto px-4"><p>{t.footer_disclaimer}</p></div>

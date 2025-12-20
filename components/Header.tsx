@@ -2,10 +2,14 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { UserRole } from '../types';
+import GlobeAltIcon from './icons/GlobeAltIcon';
 
 interface HeaderProps {
   appName: string;
   appDescription: string;
+  currentLang: 'es' | 'en';
+  onLangChange: (lang: 'es' | 'en') => void;
+  t: any;
 }
 
 const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
@@ -29,7 +33,7 @@ const RoleBadge: React.FC<{ role: UserRole }> = ({ role }) => {
   );
 };
 
-const Header: React.FC<HeaderProps> = ({ appName, appDescription }) => {
+const Header: React.FC<HeaderProps> = ({ appName, appDescription, currentLang, onLangChange, t }) => {
   const { userProfile, logout } = useAuth();
 
   return (
@@ -43,29 +47,47 @@ const Header: React.FC<HeaderProps> = ({ appName, appDescription }) => {
         </p>
       </div>
       
-      {userProfile && (
-        <div className="flex items-center justify-center md:justify-end bg-white dark:bg-slate-800/80 p-1.5 sm:p-2 rounded-full md:rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 self-center md:self-auto">
-          {userProfile.photoURL ? (
-            <img src={userProfile.photoURL} alt="User" className="h-8 w-8 rounded-full" />
-          ) : (
-             <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-bold text-xs">
-               {userProfile.displayName?.charAt(0) || 'U'}
-             </div>
-          )}
-          <div className="ml-3 hidden sm:block text-left mr-2">
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center">
-              {userProfile.displayName} 
-              <RoleBadge role={userProfile.role} />
-            </p>
-          </div>
-          <button 
-            onClick={() => logout()}
-            className="ml-2 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-transparent hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-          >
-            Sign Out
-          </button>
+      <div className="flex flex-col sm:flex-row items-center gap-3 self-center md:self-auto">
+        {/* Language Selector */}
+        <div className="flex items-center bg-white dark:bg-slate-800/80 p-1 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+           <div className="px-2 text-slate-400">
+             <GlobeAltIcon className="h-4 w-4" />
+           </div>
+           <select 
+             value={currentLang} 
+             onChange={(e) => onLangChange(e.target.value as 'es' | 'en')}
+             className="bg-transparent text-xs font-bold text-slate-700 dark:text-slate-200 outline-none pr-2 py-1 cursor-pointer"
+             aria-label={t.language_selector_label}
+           >
+             <option value="es">{t.lang_es}</option>
+             <option value="en">{t.lang_en}</option>
+           </select>
         </div>
-      )}
+
+        {userProfile && (
+          <div className="flex items-center justify-center md:justify-end bg-white dark:bg-slate-800/80 p-1.5 sm:p-2 rounded-full md:rounded-lg shadow-sm border border-slate-200 dark:border-slate-700">
+            {userProfile.photoURL ? (
+              <img src={userProfile.photoURL} alt="User" className="h-8 w-8 rounded-full" />
+            ) : (
+               <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center text-blue-700 dark:text-blue-200 font-bold text-xs">
+                 {userProfile.displayName?.charAt(0) || 'U'}
+               </div>
+            )}
+            <div className="ml-3 hidden sm:block text-left mr-2">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400 flex items-center">
+                {userProfile.displayName} 
+                <RoleBadge role={userProfile.role} />
+              </p>
+            </div>
+            <button 
+              onClick={() => logout()}
+              className="ml-2 px-2 py-1 text-xs font-medium text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 border border-transparent hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
+      </div>
     </header>
   );
 };

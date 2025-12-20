@@ -18,11 +18,29 @@ const getSystemConfig = (): SystemSettings => {
     return { prioritySources: '', excludedSources: '', safetyStrictness: 'standard' };
 };
 
-// Fix: Obtained exclusively from process.env.API_KEY according to guidelines
 const getApiKey = () => {
-    const key = process.env.API_KEY;
-    if (!key || key === "undefined" || key === "null" || key.trim() === "") return null;
-    return key.trim();
+    try {
+        // @ts-ignore
+        const key = typeof process !== 'undefined' ? process.env.API_KEY : null;
+        if (!key || key === "undefined" || key === "null" || String(key).trim() === "") return null;
+        return String(key).trim();
+    } catch (e) {
+        return null;
+    }
+};
+
+const buildSystemInstruction = (lang: 'es' | 'en'): string => {
+    const config = getSystemConfig();
+    const priority = config.prioritySources ? `PRIORITIZE medical information from the following domains: ${config.prioritySources}.` : '';
+    const excluded = config.excludedSources ? `STRICTLY EXCLUDE information from: ${config.excludedSources}.` : '';
+    
+    return `You are a Clinical Pharmacologist and Patient Safety Expert.
+    Focus on evidence-based medical results.
+    ${priority}
+    ${excluded}
+    Safety Strictness Level: ${config.safetyStrictness.toUpperCase()}.
+    Respond exclusively in ${lang === 'es' ? 'Spanish' : 'English'}.
+    Precision is mandatory. Explain the pathophysiology behind every finding.`;
 };
 
 const buildPrompt = (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): string => {
@@ -33,9 +51,7 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
       return medStr;
     }).join('; ');
 
-  return `Usted es un experto en Farmacología Clínica y Seguridad del Paciente.
-    
-    PERFIL DEL PACIENTE:
+  return `PERFIL DEL PACIENTE:
     - Medicamentos Activos: ${medList}
     - Alergias: ${allergies || 'Ninguna'}
     - Suplementos/Otras Sustancias: ${otherSubstances || 'Ninguna'}
@@ -64,7 +80,6 @@ const buildPrompt = (medications: Medication[], allergies: string, otherSubstanc
 };
 
 export const analyzeInteractions = async (medications: Medication[], allergies: string, otherSubstances: string, conditions: string, dateOfBirth: string, pharmacogenetics: string, lang: 'es' | 'en'): Promise<AnalysisResult> => {
-  // Fix: Cast translations[lang] to any to avoid property access errors when en is being populated
   const t = (translations as any)[lang];
   const apiKey = getApiKey();
   if (!apiKey) throw new Error(t.error_api_key_invalid);
@@ -77,7 +92,7 @@ export const analyzeInteractions = async (medications: Medication[], allergies: 
       model: "gemini-3-pro-preview", 
       contents: prompt,
       config: {
-        systemInstruction: "Clinical Pharmacologist. Precision focus. Evidence-based results.",
+        systemInstruction: buildSystemInstruction(lang),
         tools: [{ googleSearch: {} }]
       },
     });
@@ -155,7 +170,7 @@ export const investigateSymptoms = async (symptoms: string, medications: Medicat
         model: "gemini-3-pro-preview", 
         contents: prompt,
         config: { 
-          systemInstruction: `Usted es un experto clínico que responde exclusivamente en ${lang === 'es' ? 'español' : 'inglés'}. No use términos en inglés a menos que sean nombres propios de fármacos.`,
+          systemInstruction: buildSystemInstruction(lang),
           tools: [{ googleSearch: {} }] 
         },
     });
